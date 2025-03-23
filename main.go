@@ -19,6 +19,8 @@ func main() {
         http.HandleFunc("/reset-password", resetPasswordHandler)
 
         // Start the server
-        fmt.Println("Server started on http://0.0.0.0:5000")
-        log.Fatal(http.ListenAndServe("0.0.0.0:5000", nil))
+        port := "5000"
+        addr := "0.0.0.0:" + port
+        fmt.Printf("Server started on http://%s\n", addr)
+        log.Fatal(http.ListenAndServe(addr, nil))
 }
