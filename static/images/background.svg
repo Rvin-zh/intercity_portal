@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800">
+  <!-- Background -->
+  <rect width="1200" height="800" fill="#E9EFF2" />
+  
+  <!-- Globe -->
+  <circle cx="600" cy="400" r="200" fill="none" stroke="#A3C5D8" stroke-width="2" opacity="0.6" />
+  <circle cx="600" cy="400" r="180" fill="none" stroke="#A3C5D8" stroke-width="1" opacity="0.4" />
+  <circle cx="600" cy="400" r="160" fill="none" stroke="#A3C5D8" stroke-width="1" opacity="0.3" />
+  
+  <!-- Continents (simplified) -->
+  <path d="M580,310 Q600,290 630,300 Q660,310 670,340 Q680,370 650,390 Q620,410 590,390 Q560,370 580,310" fill="#C9DCE6" opacity="0.7" />
+  <path d="M520,380 Q540,360 570,370 Q600,380 590,410 Q580,440 550,430 Q520,420 520,380" fill="#C9DCE6" opacity="0.7" />
+  <path d="M630,430 Q650,410 680,420 Q710,430 700,460 Q690,490 660,480 Q630,470 630,430" fill="#C9DCE6" opacity="0.7" />
+  
+  <!-- City Skyline -->
+  <rect x="200" y="500" width="20" height="100" fill="#B3C8D5" />
+  <rect x="230" y="480" width="25" height="120" fill="#B3C8D5" />
+  <rect x="265" y="520" width="20" height="80" fill="#B3C8D5" />
+  <rect x="295" y="490" width="30" height="110" fill="#B3C8D5" />
+  <rect x="340" y="510" width="25" height="90" fill="#B3C8D5" />
+  <rect x="375" y="470" width="15" height="130" fill="#B3C8D5" />
+  <rect x="400" y="490" width="30" height="110" fill="#B3C8D5" />
+  
+  <!-- Clock Tower -->
+  <rect x="450" y="440" width="15" height="160" fill="#A3C5D8" />
+  <circle cx="457.5" cy="430" r="10" fill="#A3C5D8" />
+  
+  <!-- Modern Buildings -->
+  <rect x="500" y="480" width="40" height="120" fill="#B3C8D5" />
+  <rect x="550" y="460" width="30" height="140" fill="#B3C8D5" />
+  <rect x="590" y="490" width="35" height="110" fill="#B3C8D5" />
+  <rect x="635" y="470" width="25" height="130" fill="#B3C8D5" />
+  
+  <!-- Ferris Wheel (simplified) -->
+  <circle cx="700" cy="480" r="40" fill="none" stroke="#A3C5D8" stroke-width="4" />
+  <line x1="700" y1="440" x2="700" y2="520" stroke="#A3C5D8" stroke-width="3" />
+  <line x1="660" y1="480" x2="740" y2="480" stroke="#A3C5D8" stroke-width="3" />
+  <line x1="672" y1="452" x2="728" y2="508" stroke="#A3C5D8" stroke-width="2" />
+  <line x1="672" y1="508" x2="728" y2="452" stroke="#A3C5D8" stroke-width="2" />
+  
+  <!-- More Buildings -->
+  <rect x="760" y="500" width="30" height="100" fill="#B3C8D5" />
+  <rect x="800" y="470" width="20" height="130" fill="#B3C8D5" />
+  <rect x="830" y="510" width="35" height="90" fill="#B3C8D5" />
+  <rect x="875" y="480" width="25" height="120" fill="#B3C8D5" />
+  <rect x="910" y="460" width="15" height="140" fill="#B3C8D5" />
+  <rect x="935" y="490" width="40" height="110" fill="#B3C8D5" />
+  
+  <!-- Train Tracks -->
+  <line x1="100" y1="600" x2="1100" y2="600" stroke="#A3C5D8" stroke-width="5" />
+  <line x1="100" y1="605" x2="1100" y2="605" stroke="#A3C5D8" stroke-width="2" />
+  
+  <!-- Modern Train -->
+  <rect x="300" y="580" width="120" height="20" rx="5" fill="#A3C5D8" />
+  <rect x="300" y="565" width="120" height="15" rx="8" fill="#C9DCE6" />
+  <circle cx="320" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="340" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="380" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="400" cy="600" r="7" fill="#8AA9BB" />
+  
+  <!-- High-Speed Train -->
+  <path d="M480,580 L500,565 L600,565 L620,580 L620,600 L480,600 Z" fill="#C9DCE6" />
+  <circle cx="500" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="520" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="580" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="600" cy="600" r="7" fill="#8AA9BB" />
+  
+  <!-- Steam Train -->
+  <rect x="680" y="580" width="80" height="20" fill="#A3C5D8" />
+  <rect x="760" y="570" width="40" height="30" fill="#A3C5D8" />
+  <rect x="670" y="570" width="20" height="10" fill="#A3C5D8" />
+  <circle cx="690" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="710" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="730" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="750" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="770" cy="600" r="7" fill="#8AA9BB" />
+  <circle cx="790" cy="600" r="7" fill="#8AA9BB" />
+  
+  <!-- Airplane 1 -->
+  <path d="M200,200 L250,180 L310,180 L330,200 L310,220 L250,220 Z" fill="#C9DCE6" />
+  <path d="M260,180 L270,160 L290,160 L300,180 Z" fill="#C9DCE6" />
+  <rect x="240" y="190" width="80" height="20" rx="10" fill="#A3C5D8" />
+  <path d="M260,220 L250,240 L290,240 L280,220 Z" fill="#C9DCE6" />
+  
+  <!-- Airplane 2 -->
+  <path d="M900,240 L950,220 L1010,220 L1030,240 L1010,260 L950,260 Z" fill="#C9DCE6" />
+  <path d="M960,220 L970,200 L990,200 L1000,220 Z" fill="#C9DCE6" />
+  <rect x="940" y="230" width="80" height="20" rx="10" fill="#A3C5D8" />
+  <path d="M960,260 L950,280 L990,280 L980,260 Z" fill="#C9DCE6" />
+  
+  <!-- Decorative circles -->
+  <circle cx="150" cy="150" r="3" fill="#A3C5D8" />
+  <circle cx="180" cy="180" r="2" fill="#A3C5D8" />
+  <circle cx="200" cy="120" r="4" fill="#A3C5D8" />
+  <circle cx="230" cy="150" r="3" fill="#A3C5D8" />
+  <circle cx="950" cy="150" r="3" fill="#A3C5D8" />
+  <circle cx="980" cy="180" r="2" fill="#A3C5D8" />
+  <circle cx="1000" cy="120" r="4" fill="#A3C5D8" />
+  <circle cx="1030" cy="150" r="3" fill="#A3C5D8" />
+  
+  <!-- Flight paths -->
+  <path d="M260,190 Q600,100 940,230" fill="none" stroke="#A3C5D8" stroke-width="1" stroke-dasharray="5,5" opacity="0.6" />
+</svg>
