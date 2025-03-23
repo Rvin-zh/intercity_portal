@@ -3,12 +3,12 @@
 
 :root {
   --primary-bg: #E9EFF2;
-  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-bg: rgba(255, 255, 255, 0.95);
   --primary-text: #333;
   --secondary-text: #666;
-  --primary-color: #3B82F6;
+  --primary-color: #6B91B3;
   --border-color: #DDD;
-  --input-bg: #F1F5F9;
+  --input-bg: #EAEAEA;
   --button-bg: #CBD5E1;
   --button-hover: #94A3B8;
   --error-color: #EF4444;
@@ -21,14 +21,9 @@ body {
   color: var(--primary-text);
   line-height: 1.5;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   margin: 0;
-  background-image: linear-gradient(to bottom, rgba(233, 239, 242, 0.5), rgba(233, 239, 242, 0.9));
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   position: relative;
+  overflow-x: hidden;
 }
 
 /* Background image with transportation theme */
@@ -41,7 +36,7 @@ body {
   z-index: -1;
   background: url('/static/images/background.svg') no-repeat center center;
   background-size: cover;
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .container {
@@ -49,9 +44,8 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 1rem;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  height: 100vh;
+  position: relative;
 }
 
 /* Navigation */
@@ -62,22 +56,23 @@ body {
 }
 
 .nav-item {
-  padding: 0.5rem 1rem;
-  margin-right: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  margin-right: 1rem;
   text-decoration: none;
   color: var(--primary-text);
-  background-color: var(--button-bg);
-  border-radius: 1.5rem;
+  background-color: rgba(203, 213, 225, 0.7);
+  border-radius: 2rem;
   font-size: 0.875rem;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .nav-item:hover {
-  background-color: var(--button-hover);
+  background-color: rgba(148, 163, 184, 0.8);
 }
 
 .nav-item.active {
-  background-color: var(--primary-color);
+  background-color: rgba(107, 145, 179, 0.8);
   color: white;
 }
 
@@ -86,52 +81,52 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 80vh;
+  height: 75vh;
 }
 
 .auth-card {
   background-color: var(--card-bg);
-  border-radius: 1rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 400px;
-  padding: 2rem;
-  backdrop-filter: blur(10px);
+  max-width: 380px;
+  padding: 2.5rem;
+  backdrop-filter: blur(5px);
 }
 
 .auth-card-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 1.5rem;
+  font-size: 1.4rem;
+  font-weight: 500;
+  margin-bottom: 2rem;
   text-align: center;
   color: var(--primary-text);
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-label {
   display: block;
   margin-bottom: 0.5rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--primary-text);
 }
 
 .form-input {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: 0.5rem;
   background-color: var(--input-bg);
   font-size: 0.875rem;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  background-color: #f3f3f3;
+  box-shadow: 0 0 0 2px rgba(107, 145, 179, 0.3);
 }
 
 .password-wrapper {
@@ -158,12 +153,12 @@ body {
   background-color: var(--button-bg);
   color: var(--primary-text);
   border: none;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
   text-align: center;
 }
 
@@ -172,30 +167,32 @@ body {
 }
 
 .auth-button-primary {
-  background-color: var(--primary-color);
+  background-color: #6B91B3;
   color: white;
 }
 
 .auth-button-primary:hover {
-  background-color: #2563EB;
+  background-color: #5A7D9A;
 }
 
 .forgot-password {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
   font-size: 0.875rem;
 }
 
 .forgot-link {
-  color: var(--secondary-text);
+  color: #6B91B3;
   text-decoration: none;
+  background-color: rgba(203, 213, 225, 0.5);
+  padding: 0.35rem 1rem;
+  border-radius: 1rem;
 }
 
 .forgot-link:hover {
-  color: var(--primary-color);
-  text-decoration: underline;
+  background-color: rgba(203, 213, 225, 0.8);
 }
 
 /* Message alerts */
