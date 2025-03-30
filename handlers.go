@@ -227,6 +227,12 @@ func resetPasswordHandler(w http.ResponseWriter, r *http.Request) {
         http.Redirect(w, r, "/login?error=Reset functionality not implemented in demo", http.StatusSeeOther)
 }
 
+// Logout handler
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+        // In a full application, you would invalidate the session here
+        http.Redirect(w, r, "/?success=Successfully logged out", http.StatusSeeOther)
+}
+
 // Register handler - For user registration
 func basicRegisterHandler(w http.ResponseWriter, r *http.Request) {
         if r.Method == "POST" {

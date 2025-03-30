@@ -30,6 +30,7 @@ func main() {
         http.HandleFunc("/forgot", forgotHandler)
         http.HandleFunc("/reset-password", resetPasswordHandler)
         http.HandleFunc("/register", basicRegisterHandler)
+        http.HandleFunc("/logout", logoutHandler)
 
         // Start the server
         port := "5000"
