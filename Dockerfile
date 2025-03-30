@@ -1,5 +1,8 @@
 FROM golang:1.20-alpine
 
+# Install git for dependency downloads
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 # Copy go mod and sum files
