@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="auth-container">
-    <div class="auth-card">
+    <div class="auth-card" style="width: 600px; max-width: 90%;">
         <h1 class="auth-card-title">Transportation Portal</h1>
         
         {{if .Success}}
@@ -9,13 +9,79 @@
         </div>
         {{end}}
         
-        <p style="text-align: center; margin-bottom: 1.5rem;">
-            Welcome to the transportation portal. Please sign in to access your account.
-        </p>
-        
-        <div style="text-align: center;">
-            <a href="/login" class="auth-button auth-button-primary" style="width: 100%;">Sign In</a>
-        </div>
+        <!-- If no users are logged in or it's the first visit -->
+        {{if not .LoginLogs}}
+            <p style="text-align: center; margin-bottom: 1.5rem;">
+                Welcome to the transportation portal. Please sign in to access your account.
+            </p>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 1rem;">
+                <a href="/login" class="auth-button auth-button-primary" style="width: 48%;">Sign In</a>
+                <a href="/register" class="auth-button auth-button-secondary" style="width: 48%;">Register</a>
+            </div>
+        {{else}}
+            <!-- Dashboard content - visible after login -->
+            <div class="dashboard-section">
+                <h2 class="section-title">Users</h2>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Created At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Users}}
+                            <tr>
+                                <td>{{.id}}</td>
+                                <td>{{.username}}</td>
+                                <td>{{.created_at}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="dashboard-section">
+                <h2 class="section-title">Recent Login Activity</h2>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .LoginLogs}}
+                            <tr>
+                                <td>{{.username}}</td>
+                                <td>{{.login_time}}</td>
+                                <td>
+                                    {{if .success}}
+                                    <span class="status-success">Success</span>
+                                    {{else}}
+                                    <span class="status-failed">Failed</span>
+                                    {{end}}
+                                </td>
+                                <td>{{.ip_address}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 1.5rem;">
+                <a href="/login" class="auth-button auth-button-secondary" style="width: 48%;">Sign In Again</a>
+                <a href="/register" class="auth-button auth-button-primary" style="width: 48%;">Register New User</a>
+            </div>
+        {{end}}
     </div>
 </div>
 {{end}}

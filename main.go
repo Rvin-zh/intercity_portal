@@ -14,9 +14,10 @@ func main() {
         // Set up routes
         http.HandleFunc("/", indexHandler)
         http.HandleFunc("/login", loginHandler)
-        http.HandleFunc("/auth", authHandler)
+        http.HandleFunc("/auth", basicAuthHandler)
         http.HandleFunc("/forgot", forgotHandler)
         http.HandleFunc("/reset-password", resetPasswordHandler)
+        http.HandleFunc("/register", basicRegisterHandler)
 
         // Start the server
         port := "5000"

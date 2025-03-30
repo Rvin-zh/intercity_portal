@@ -8,11 +8,13 @@
   --secondary-text: #666;
   --primary-color: #6B91B3;
   --border-color: #DDD;
-  --input-bg: #EAEAEA;
+  --input-bg: #f1f1f1;
   --button-bg: #CBD5E1;
   --button-hover: #94A3B8;
   --error-color: #EF4444;
   --success-color: #10B981;
+  --nav-button-bg: rgba(255, 255, 255, 0.7);
+  --sign-in-button-bg: #CBD5E1;
 }
 
 body {
@@ -53,14 +55,15 @@ body {
   display: flex;
   justify-content: flex-start;
   padding: 1rem 0;
+  align-items: center;
 }
 
 .nav-item {
   padding: 0.5rem 1.5rem;
-  margin-right: 1rem;
+  margin-right: 0.5rem;
   text-decoration: none;
   color: var(--primary-text);
-  background-color: rgba(203, 213, 225, 0.7);
+  background-color: var(--nav-button-bg);
   border-radius: 2rem;
   font-size: 0.875rem;
   transition: all 0.2s ease;
@@ -68,12 +71,13 @@ body {
 }
 
 .nav-item:hover {
-  background-color: rgba(148, 163, 184, 0.8);
+  background-color: rgba(255, 255, 255, 0.9);
 }
 
 .nav-item.active {
-  background-color: rgba(107, 145, 179, 0.8);
-  color: white;
+  background-color: var(--nav-button-bg);
+  color: var(--primary-text);
+  font-weight: 500;
 }
 
 /* Auth card */
@@ -167,12 +171,13 @@ body {
 }
 
 .auth-button-primary {
-  background-color: #6B91B3;
-  color: white;
+  background-color: var(--sign-in-button-bg);
+  color: var(--primary-text);
+  border-radius: 2rem;
 }
 
 .auth-button-primary:hover {
-  background-color: #5A7D9A;
+  background-color: rgba(203, 213, 225, 0.9);
 }
 
 .forgot-password {
@@ -214,6 +219,71 @@ body {
   border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
+/* Dashboard styles */
+.dashboard-section {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.2rem;
+  color: var(--primary-text);
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.data-table th {
+  background-color: rgba(107, 145, 179, 0.1);
+  font-weight: 500;
+  color: var(--primary-text);
+}
+
+.data-table tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.data-table tr:hover {
+  background-color: rgba(107, 145, 179, 0.05);
+}
+
+.status-success {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+.status-failed {
+  color: var(--error-color);
+  font-weight: 500;
+}
+
+/* Secondary button style */
+.auth-button-secondary {
+  background-color: #E2E8F0;
+  color: #475569;
+}
+
+.auth-button-secondary:hover {
+  background-color: #CBD5E1;
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
   .auth-card {
@@ -226,5 +296,14 @@ body {
   
   .form-input {
     padding: 0.625rem 0.875rem;
+  }
+  
+  .data-table {
+    font-size: 0.75rem;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 0.5rem;
   }
 }
