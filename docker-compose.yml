@@ -4,6 +4,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - GOPROXY=direct
+        - GOSUMDB=off
     ports:
       - "5000:5000"
     depends_on:
@@ -13,6 +16,9 @@ services:
     networks:
       - transport-network
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   db:
     container_name: go-transport-db
