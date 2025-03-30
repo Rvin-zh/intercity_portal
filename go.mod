@@ -1,4 +1,4 @@
-module loginapp
+module go-transportation-portal
 
 go 1.20
 

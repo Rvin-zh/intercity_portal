@@ -14,6 +14,9 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
+# Update module path for Docker environment
+RUN go mod init go-transportation-portal
+
 # Build the application
 RUN go build -o main .
 

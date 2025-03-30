@@ -6,9 +6,8 @@ import (
         "net/http"
         "path/filepath"
         "strings"
-        "time"
         
-        "loginapp/db"
+        "go-transportation-portal/db"
 )
 
 // Template cache
@@ -88,31 +87,25 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
         // Get user data from database
         users, err := db.GetAllUsers()
         if err != nil {
-                // If there's an error, create dummy data as fallback
+                // Log the error but don't use fallback data
                 fmt.Printf("Error fetching users: %v\n", err)
-                users = []map[string]interface{}{
-                        {
-                                "id":         1,
-                                "username":   "admin",
-                                "created_at": time.Now().Add(-24 * time.Hour),
-                        },
-                }
+                // Return empty array instead of fallback data
+                users = []map[string]interface{}{}
+                // Add a message in the UI
+                data.Error = "Unable to fetch user data from the database. Please try again later."
         }
         data.Users = users
 
         // Get login logs from database
         logs, err := db.GetRecentLoginLogs(10)
         if err != nil {
-                // If there's an error, create dummy data as fallback
+                // Log the error but don't use fallback data
                 fmt.Printf("Error fetching login logs: %v\n", err)
-                logs = []map[string]interface{}{
-                        {
-                                "id":         1,
-                                "username":   "admin",
-                                "login_time": time.Now(),
-                                "success":    true,
-                                "ip_address": "127.0.0.1",
-                        },
+                // Return empty array instead of fallback data
+                logs = []map[string]interface{}{}
+                // Add additional message only if we don't already have an error
+                if data.Error == "" {
+                        data.Error = "Unable to fetch login history. Please try again later."
                 }
         }
         data.LoginLogs = logs

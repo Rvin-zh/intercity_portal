@@ -5,7 +5,7 @@ import (
         "log"
         "net/http"
         
-        "loginapp/db"
+        "go-transportation-portal/db"
 )
 
 func main() {

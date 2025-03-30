@@ -27,9 +27,16 @@ func InitializeDB() error {
         // Log connection attempt for debugging
         log.Printf("Connecting to PostgreSQL at %s:%s database=%s user=%s", host, port, dbname, user)
         
-        // Construct PostgreSQL connection string with SSL enabled
-        connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-                host, port, user, password, dbname)
+        // Construct PostgreSQL connection string
+        // Determine SSL mode based on environment
+        // Use sslmode=require for Replit's managed PostgreSQL, but sslmode=disable for Docker
+        sslMode := "disable"
+        if os.Getenv("REPL_ID") != "" || os.Getenv("PGHOST") != "" {
+                sslMode = "require"
+        }
+        
+        connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+                host, port, user, password, dbname, sslMode)
         
         // Open the database connection
         db, err = sql.Open("postgres", connStr)
