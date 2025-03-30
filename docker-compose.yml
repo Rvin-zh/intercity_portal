@@ -8,13 +8,8 @@ services:
       - "5000:5000"
     depends_on:
       - db
-    environment:
-      - PGHOST=db
-      - PGDATABASE=transport
-      - PGUSER=postgres
-      - PGPASSWORD=postgres
-      - PGPORT=5432
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/transport?sslmode=disable
+    env_file:
+      - .env
     networks:
       - transport-network
     restart: unless-stopped

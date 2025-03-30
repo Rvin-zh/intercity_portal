@@ -31,7 +31,10 @@ func InitializeDB() error {
         // Determine SSL mode based on environment
         // Use sslmode=require for Replit's managed PostgreSQL, but sslmode=disable for Docker
         sslMode := "disable"
-        if os.Getenv("REPL_ID") != "" || os.Getenv("PGHOST") != "" {
+        
+        // Only enable SSL if we're running on Replit and connecting to a remote DB
+        // For Docker connection to the 'db' container, always disable SSL
+        if os.Getenv("REPL_ID") != "" && host != "db" {
                 sslMode = "require"
         }
         
