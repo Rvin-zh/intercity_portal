@@ -9,17 +9,19 @@ services:
     depends_on:
       - db
     environment:
-      - DB_HOST=db
-      - DB_NAME=transport
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - PGHOST=db
+      - PGDATABASE=transport
+      - PGUSER=postgres
+      - PGPASSWORD=postgres
+      - PGPORT=5432
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/transport?sslmode=disable
     networks:
       - transport-network
     restart: unless-stopped
 
   db:
     container_name: go-transport-db
-    image: postgres:15-alpine
+    image: postgres:15
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres

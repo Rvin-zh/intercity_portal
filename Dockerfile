@@ -1,7 +1,6 @@
-FROM golang:1.20-alpine
+FROM golang:1.20
 
-# Install git for dependency downloads
-RUN apk add --no-cache git
+# No need to install git, it's already in the debian-based image
 
 WORKDIR /app
 
@@ -14,8 +13,7 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
-# Update module path for Docker environment
-RUN go mod init go-transportation-portal
+# No need to reinitialize module as we've already copied go.mod
 
 # Build the application
 RUN go build -o main .
