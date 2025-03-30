@@ -27,8 +27,7 @@ func InitializeDB() error {
         // Log connection attempt for debugging
         log.Printf("Connecting to PostgreSQL at %s:%s database=%s user=%s", host, port, dbname, user)
         
-        // Construct PostgreSQL connection string
-        // Use sslmode=require for security with Replit's managed PostgreSQL
+        // Construct PostgreSQL connection string with SSL enabled
         connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
                 host, port, user, password, dbname)
         

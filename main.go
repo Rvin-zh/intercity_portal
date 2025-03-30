@@ -4,9 +4,21 @@ import (
         "fmt"
         "log"
         "net/http"
+        
+        "loginapp/db"
 )
 
 func main() {
+        // Initialize database
+        err := db.InitializeDB()
+        if err != nil {
+                log.Printf("Warning: Database initialization failed: %v", err)
+                log.Println("Continuing with limited functionality...")
+        } else {
+                // Close the database connection when the program exits
+                defer db.CloseDB()
+        }
+
         // Set up file server for static files
         fs := http.FileServer(http.Dir("static"))
         http.Handle("/static/", http.StripPrefix("/static/", fs))

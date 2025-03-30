@@ -1,0 +1,42 @@
+version: '3'
+
+services:
+  app:
+    container_name: go-transport-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_NAME=transport
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    networks:
+      - transport-network
+    restart: unless-stopped
+
+  db:
+    container_name: go-transport-db
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=transport
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    networks:
+      - transport-network
+    restart: unless-stopped
+
+networks:
+  transport-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

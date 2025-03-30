@@ -7,6 +7,8 @@ import (
         "path/filepath"
         "strings"
         "time"
+        
+        "loginapp/db"
 )
 
 // Template cache
@@ -83,39 +85,37 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
                 data.Success = successMsg
         }
 
-        // Add dummy user data for the dashboard
-        dummyUsers := []map[string]interface{}{
-                {
-                        "id":         1,
-                        "username":   "admin",
-                        "created_at": time.Now().Add(-24 * time.Hour),
-                },
-                {
-                        "id":         2,
-                        "username":   "user1",
-                        "created_at": time.Now().Add(-12 * time.Hour),
-                },
+        // Get user data from database
+        users, err := db.GetAllUsers()
+        if err != nil {
+                // If there's an error, create dummy data as fallback
+                fmt.Printf("Error fetching users: %v\n", err)
+                users = []map[string]interface{}{
+                        {
+                                "id":         1,
+                                "username":   "admin",
+                                "created_at": time.Now().Add(-24 * time.Hour),
+                        },
+                }
         }
-        data.Users = dummyUsers
+        data.Users = users
 
-        // Add dummy login logs
-        dummyLogs := []map[string]interface{}{
-                {
-                        "id":         1,
-                        "username":   "admin",
-                        "login_time": time.Now().Add(-1 * time.Hour),
-                        "success":    true,
-                        "ip_address": "127.0.0.1",
-                },
-                {
-                        "id":         2,
-                        "username":   "user1",
-                        "login_time": time.Now().Add(-30 * time.Minute),
-                        "success":    true,
-                        "ip_address": "127.0.0.1",
-                },
+        // Get login logs from database
+        logs, err := db.GetRecentLoginLogs(10)
+        if err != nil {
+                // If there's an error, create dummy data as fallback
+                fmt.Printf("Error fetching login logs: %v\n", err)
+                logs = []map[string]interface{}{
+                        {
+                                "id":         1,
+                                "username":   "admin",
+                                "login_time": time.Now(),
+                                "success":    true,
+                                "ip_address": "127.0.0.1",
+                        },
+                }
         }
-        data.LoginLogs = dummyLogs
+        data.LoginLogs = logs
 
         renderTemplate(w, "index.html", data)
 }
@@ -162,8 +162,33 @@ func basicAuthHandler(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // For demo purposes, accept any username/password
-        // In a real app, you would validate against a database
+        // Validate user against database
+        valid, err := db.ValidateUser(username, password)
+        
+        // Get IP address for logging
+        ipAddress := r.RemoteAddr
+        if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+                ipAddress = ip
+        }
+        
+        // Log this login attempt
+        logErr := db.LogLoginAttempt(username, valid && err == nil, ipAddress)
+        if logErr != nil {
+                fmt.Printf("Failed to log login attempt: %v\n", logErr)
+        }
+
+        if err != nil {
+                fmt.Printf("Error during login validation: %v\n", err)
+                http.Redirect(w, r, "/login?error=System error, please try again", http.StatusSeeOther)
+                return
+        }
+
+        if !valid {
+                http.Redirect(w, r, "/login?error=Invalid username or password", http.StatusSeeOther)
+                return
+        }
+
+        // Successful login
         http.Redirect(w, r, "/?success=Successfully logged in", http.StatusSeeOther)
 }
 
@@ -233,8 +258,34 @@ func basicRegisterHandler(w http.ResponseWriter, r *http.Request) {
                         return
                 }
 
-                // In a real app, we would create the user in a database
-                // For demo purposes, just redirect with success message
+                // Check if user already exists
+                exists, err := db.UserExists(username)
+                if err != nil {
+                        fmt.Printf("Error checking if user exists: %v\n", err)
+                        http.Redirect(w, r, "/register?error=System error, please try again", http.StatusSeeOther)
+                        return
+                }
+                
+                if exists {
+                        http.Redirect(w, r, "/register?error=Username already exists", http.StatusSeeOther)
+                        return
+                }
+                
+                // Create the user in the database
+                err = db.CreateUser(username, password)
+                if err != nil {
+                        fmt.Printf("Error creating user: %v\n", err)
+                        http.Redirect(w, r, "/register?error=Failed to create user: "+err.Error(), http.StatusSeeOther)
+                        return
+                }
+                
+                // Log the successful registration
+                ipAddress := r.RemoteAddr
+                if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+                        ipAddress = ip
+                }
+                db.LogLoginAttempt(username, true, ipAddress)
+                
                 http.Redirect(w, r, "/login?success=Registration successful! Please log in", http.StatusSeeOther)
         } else {
                 data := PageData{
