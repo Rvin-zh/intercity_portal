@@ -31,6 +31,8 @@ func main() {
         http.HandleFunc("/reset-password", resetPasswordHandler)
         http.HandleFunc("/register", basicRegisterHandler)
         http.HandleFunc("/logout", logoutHandler)
+        http.HandleFunc("/dashboard", dashboardHandler)
+        http.HandleFunc("/health", healthCheckHandler)
 
         // Start the server
         port := "5000"
