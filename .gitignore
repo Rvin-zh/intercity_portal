@@ -29,6 +29,9 @@ Thumbs.db
 nohup.out
 
 # Electron specific
+node_modules/
+*/node_modules/
+**/node_modules/**
 electron-app/node_modules/
 electron-app/dist/
 # Explicitly excluding dist directory with all contents
