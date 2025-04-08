@@ -1,350 +1,499 @@
 package main
 
 import (
-        "fmt"
-        "html/template"
-        "net/http"
-        "path/filepath"
-        "strings"
-        
-        "go-transportation-portal/db"
+	"SecureSignIn/db"
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
+	"fmt"
+	"html/template"
+	"log"
+	"net/http"
+	"path/filepath"
+	"regexp"
+	"runtime/debug"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// Middleware to recover from panics and log errors
+func logAndRecover(handler echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("Panic: %v\nStack trace:\n%s", err, string(debug.Stack()))
+				httpError := echo.NewHTTPError(http.StatusInternalServerError, "An unexpected error occurred. Please try again later.")
+				c.Error(httpError)
+			}
+		}()
+
+		log.Printf("Request: %s %s from %s", c.Request().Method, c.Request().URL.Path, c.RealIP())
+		err := handler(c)
+		if err != nil {
+			log.Printf("Handler error for %s %s: %v", c.Request().Method, c.Request().URL.Path, err)
+			return err
+		}
+		log.Printf("Response %d sent for: %s %s", c.Response().Status, c.Request().Method, c.Request().URL.Path)
+		return nil
+	}
+}
 
 // Template cache
 var templates = make(map[string]*template.Template)
 
 // Load templates on init
 func init() {
-        templatesDir := "templates"
-        layouts, err := filepath.Glob(templatesDir + "/base.html")
-        if err != nil {
-                panic(err)
-        }
+	templatesDir := "templates"
+	log.Printf("Loading templates from: %s", templatesDir)
 
-        includes, err := filepath.Glob(templatesDir + "/*.html")
-        if err != nil {
-                panic(err)
-        }
+	layouts, err := filepath.Glob(filepath.Join(templatesDir, "base.html"))
+	if err != nil || len(layouts) == 0 {
+		log.Fatalf("Error loading base template: %v (found: %d)", err, len(layouts))
+	}
+	log.Printf("Found base template: %v", layouts)
 
-        // Generate our templates map from our layouts/ and includes/ directories
-        for _, include := range includes {
-                // Skip the base layout since we'll use it as our template base
-                if include == templatesDir+"/base.html" {
-                        continue
-                }
-                
-                files := []string{include}
-                files = append(files, layouts...)
-                
-                fileName := filepath.Base(include)
-                templates[fileName] = template.Must(template.ParseFiles(files...))
-        }
+	includes, err := filepath.Glob(filepath.Join(templatesDir, "*.html"))
+	if err != nil {
+		log.Fatalf("Error finding template includes: %v", err)
+	}
+	log.Printf("Found templates: %v", includes)
+
+	funcMap := template.FuncMap{
+		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
+	}
+
+	for _, include := range includes {
+		if filepath.Base(include) == "base.html" {
+			continue
+		}
+
+		files := append([]string{include}, layouts...)
+		fileName := filepath.Base(include)
+		log.Printf("Loading template: %s with files: %v", fileName, files)
+		templates[fileName] = template.Must(template.New(fileName).Funcs(funcMap).ParseFiles(files...))
+	}
+
+	log.Printf("Templates loaded successfully. Count: %d", len(templates))
+	if _, ok := templates["login.html"]; !ok {
+		log.Fatalf("FATAL: login.html template not loaded correctly.")
+	}
 }
 
 // Render a template given a model
-func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-        // Ensure the template exists in the map
-        t, ok := templates[tmpl]
-        if !ok {
-                http.Error(w, fmt.Sprintf("The template %s does not exist.", tmpl), http.StatusInternalServerError)
-                return
-        }
+func renderTemplate(c echo.Context, tmpl string, data interface{}) error {
+	log.Printf("Attempting to render template: %s", tmpl)
 
-        // Execute the template
-        err := t.ExecuteTemplate(w, "base", data)
-        if err != nil {
-                http.Error(w, err.Error(), http.StatusInternalServerError)
-        }
+	t, ok := templates[tmpl]
+	if !ok {
+		log.Printf("Template %s does not exist in map. Available templates: %v", tmpl, templates)
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Template %s not found.", tmpl))
+	}
+
+	var buf strings.Builder
+	err := t.ExecuteTemplate(&buf, "base", data)
+	if err != nil {
+		log.Printf("Error executing template %s: %v", tmpl, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error rendering page.")
+	}
+
+	return c.HTML(http.StatusOK, buf.String())
 }
 
 // Page data struct
 type PageData struct {
-        Title      string
-        Error      string
-        Success    string
-        ActivePage string
-        Users      []map[string]interface{}
-        LoginLogs  []map[string]interface{}
-        IsLoggedIn bool
-        Username   string
+	Title      string
+	Error      string
+	Success    string
+	ActivePage string
+	Users      []map[string]interface{}
+	LoginLogs  []map[string]interface{}
+	IsLoggedIn bool
+	Username   string
+	ResetToken string
 }
 
-// Index handler - Home page (redirects to login or dashboard)
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-        if r.URL.Path != "/" {
-                http.NotFound(w, r)
-                return
-        }
-
-        // Extract username from the URL query param (indicates user logged in)
-        username := r.URL.Query().Get("user")
-        
-        // Check for success message
-        successMsg := r.URL.Query().Get("success")
-        
-        if username != "" {
-                // User is logged in, redirect to dashboard
-                redirectURL := "/dashboard?user=" + username
-                if successMsg != "" {
-                    redirectURL += "&success=" + successMsg
-                }
-                http.Redirect(w, r, redirectURL, http.StatusSeeOther)
-                return
-        }
-        
-        // User not logged in, redirect to login page
-        redirectURL := "/login"
-        if successMsg != "" {
-            redirectURL += "?success=" + successMsg
-        }
-        http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+// --- Password Reset Token Store (In-Memory - Demo Only) ---
+type ResetTokenInfo struct {
+	UserID int
+	Expiry time.Time
 }
 
-// Dashboard handler - For logged in users
-func dashboardHandler(w http.ResponseWriter, r *http.Request) {
-        // Extract username from query
-        username := r.URL.Query().Get("user")
-        
-        // If no username, redirect to login
-        if username == "" {
-                http.Redirect(w, r, "/login?error=You must be logged in to view the dashboard", http.StatusSeeOther)
-                return
-        }
-        
-        data := PageData{
-                Title:      "Transportation Portal - Dashboard",
-                ActivePage: "dashboard",
-                IsLoggedIn: true,
-                Username:   username,
-        }
-        
-        // Check for success message
-        if successMsg := r.URL.Query().Get("success"); successMsg != "" {
-                data.Success = successMsg
-        }
+var (
+	resetTokens = make(map[string]ResetTokenInfo)
+	tokenMutex  sync.RWMutex
+)
 
-        // Get user data from database
-        users, err := db.GetAllUsers()
-        if err != nil {
-                fmt.Printf("Error fetching users: %v\n", err)
-                users = []map[string]interface{}{}
-                data.Error = "Unable to fetch user data from the database. Please try again later."
-        }
-        data.Users = users
+const resetTokenValidity = 15 * time.Minute // Token valid for 15 minutes
 
-        // Get login logs from database
-        logs, err := db.GetRecentLoginLogs(10)
-        if err != nil {
-                fmt.Printf("Error fetching login logs: %v\n", err)
-                logs = []map[string]interface{}{}
-                if data.Error == "" {
-                        data.Error = "Unable to fetch login history. Please try again later."
-                }
-        }
-        data.LoginLogs = logs
+// generateResetToken creates a secure random token.
+func generateResetToken() (string, error) {
+	b := make([]byte, 16) // 128 bits
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
-        renderTemplate(w, "dashboard.html", data)
+// storeResetToken stores a token for a user.
+func storeResetToken(userID int) (string, error) {
+	token, err := generateResetToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate reset token: %w", err)
+	}
+	tokenMutex.Lock()
+	defer tokenMutex.Unlock()
+	resetTokens[token] = ResetTokenInfo{
+		UserID: userID,
+		Expiry: time.Now().Add(resetTokenValidity),
+	}
+	log.Printf("Stored reset token for user ID %d (expires %v)", userID, resetTokens[token].Expiry)
+	return token, nil
+}
+
+// validateResetToken checks if a token is valid and returns the user ID.
+func validateResetToken(token string) (int, bool) {
+	tokenMutex.RLock()
+	defer tokenMutex.RUnlock()
+	info, exists := resetTokens[token]
+	valid := exists && !time.Now().After(info.Expiry)
+
+	if exists && !valid { // Token expired, remove it
+		tokenMutex.Lock()
+		delete(resetTokens, token)
+		tokenMutex.Unlock()
+		log.Printf("Reset token %s expired and removed.", token)
+	}
+
+	if valid {
+		log.Printf("Validated reset token %s for user ID %d.", token, info.UserID)
+	} else {
+		log.Printf("Reset token %s invalid or not found.", token)
+	}
+	return info.UserID, valid
+}
+
+// invalidateResetToken removes a token from the store.
+func invalidateResetToken(token string) {
+	tokenMutex.Lock()
+	defer tokenMutex.Unlock()
+	delete(resetTokens, token)
+	log.Printf("Invalidated reset token %s.", token)
+}
+
+// --- End Token Store ---
+
+// --- Handlers ---
+
+// Index handler - Redirects appropriately
+func indexHandler(c echo.Context) error {
+	data := PageData{
+		Title:      "Home",
+		ActivePage: "home",
+	}
+	return renderTemplate(c, "index.html", data)
+}
+
+// Helper to convert *sql.Rows to []map[string]interface{}
+func rowsToMap(rows *sql.Rows) ([]map[string]interface{}, error) {
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		columns := make([]interface{}, len(cols))
+		columnPointers := make([]interface{}, len(cols))
+		for i := range columns {
+			columnPointers[i] = &columns[i]
+		}
+
+		if err := rows.Scan(columnPointers...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		rowMap := make(map[string]interface{})
+		for i, colName := range cols {
+			val := columnPointers[i].(*interface{})
+			rowMap[colName] = *val
+		}
+		results = append(results, rowMap)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during rows iteration: %w", err)
+	}
+	return results, nil
+}
+
+// Dashboard handler - For logged in users (Simplified, assumes auth middleware sets user)
+func dashboardHandler(c echo.Context) error {
+	userRows, err := db.GetAllUsers()
+	if err != nil {
+		log.Printf("Error getting users: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to retrieve user data.")
+	}
+	usersData, err := rowsToMap(userRows)
+	if err != nil {
+		log.Printf("Error mapping users: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to process user data.")
+	}
+
+	logRows, err := db.GetLoginHistory()
+	if err != nil {
+		log.Printf("Error getting login history: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to retrieve login history.")
+	}
+	loginData, err := rowsToMap(logRows)
+	if err != nil {
+		log.Printf("Error mapping login history: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to process login history.")
+	}
+
+	data := PageData{
+		Title:      "Dashboard",
+		ActivePage: "dashboard",
+		IsLoggedIn: true,
+		Users:      usersData,
+		LoginLogs:  loginData,
+	}
+	return renderTemplate(c, "dashboard.html", data)
 }
 
 // Login handler - Render login page
-func loginHandler(w http.ResponseWriter, r *http.Request) {
-        data := PageData{
-                Title:      "Transportation Portal - Sign In",
-                ActivePage: "login",
-                IsLoggedIn: false,
-        }
-
-        // Check if error message is passed
-        if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-                data.Error = errMsg
-        }
-
-        // Check if success message is passed
-        if successMsg := r.URL.Query().Get("success"); successMsg != "" {
-                data.Success = successMsg
-        }
-
-        renderTemplate(w, "login.html", data)
+func loginHandler(c echo.Context) error {
+	data := PageData{
+		Title:      "Login",
+		ActivePage: "login",
+		Success:    c.QueryParam("success"),
+		Error:      c.QueryParam("error"),
+	}
+	return renderTemplate(c, "login.html", data)
 }
 
 // Auth handler - Process login form
-func basicAuthHandler(w http.ResponseWriter, r *http.Request) {
-        if r.Method != "POST" {
-                http.Redirect(w, r, "/login", http.StatusSeeOther)
-                return
-        }
+func basicAuthHandler(c echo.Context) error {
+	username := strings.TrimSpace(c.FormValue("username"))
+	password := strings.TrimSpace(c.FormValue("password"))
+	ipAddress := c.RealIP()
 
-        // Parse form
-        if err := r.ParseForm(); err != nil {
-                http.Redirect(w, r, "/login?error=Error processing form", http.StatusSeeOther)
-                return
-        }
+	userRow, err := db.GetUserByUsername(username)
+	if err != nil {
+		log.Printf("Error querying user %s: %v", username, err)
+		db.LogLoginAttempt(0, ipAddress, false)
+		return c.Redirect(http.StatusSeeOther, "/login?error=Invalid credentials")
+	}
 
-        username := strings.TrimSpace(r.FormValue("username"))
-        password := strings.TrimSpace(r.FormValue("password"))
+	var userID int
+	var storedUsername string
+	var passwordHash string
 
-        // Validate input
-        if username == "" || password == "" {
-                http.Redirect(w, r, "/login?error=Username and password are required", http.StatusSeeOther)
-                return
-        }
+	err = userRow.Scan(&userID, &storedUsername, &passwordHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Login attempt failed: User %s not found", username)
+			db.LogLoginAttempt(0, ipAddress, false)
+			return c.Redirect(http.StatusSeeOther, "/login?error=Invalid credentials")
+		}
+		log.Printf("Error scanning user row for %s: %v", username, err)
+		db.LogLoginAttempt(0, ipAddress, false)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error processing login.")
+	}
 
-        // Validate user against database
-        valid, err := db.ValidateUser(username, password)
-        
-        // Get IP address for logging
-        ipAddress := r.RemoteAddr
-        if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-                ipAddress = ip
-        }
-        
-        // Log this login attempt
-        logErr := db.LogLoginAttempt(username, valid && err == nil, ipAddress)
-        if logErr != nil {
-                fmt.Printf("Failed to log login attempt: %v\n", logErr)
-        }
+	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
+	if err != nil {
+		log.Printf("Login attempt failed: Invalid password for user %s (ID: %d)", username, userID)
+		db.LogLoginAttempt(userID, ipAddress, false)
+		return c.Redirect(http.StatusSeeOther, "/login?error=Invalid credentials")
+	}
 
-        if err != nil {
-                fmt.Printf("Error during login validation: %v\n", err)
-                http.Redirect(w, r, "/login?error=System error, please try again", http.StatusSeeOther)
-                return
-        }
+	log.Printf("User %s (ID: %d) logged in successfully from %s", username, userID, ipAddress)
+	db.LogLoginAttempt(userID, ipAddress, true)
 
-        if !valid {
-                http.Redirect(w, r, "/login?error=Invalid username or password", http.StatusSeeOther)
-                return
-        }
-
-        // Successful login - redirect to dashboard with username
-        http.Redirect(w, r, "/dashboard?user="+username+"&success=Successfully logged in", http.StatusSeeOther)
+	return c.Redirect(http.StatusSeeOther, "/dashboard?success=Successfully logged in&user="+username)
 }
 
-// Forgot password handler
-func forgotHandler(w http.ResponseWriter, r *http.Request) {
-        if r.Method == "POST" {
-                // Parse form
-                if err := r.ParseForm(); err != nil {
-                        http.Redirect(w, r, "/forgot?error=Error processing form", http.StatusSeeOther)
-                        return
-                }
-
-                email := strings.TrimSpace(r.FormValue("email"))
-                if email == "" {
-                        http.Redirect(w, r, "/forgot?error=Email is required", http.StatusSeeOther)
-                        return
-                }
-
-                // In a real app, you would send a password reset email
-                // For demo purposes, just return success
-                data := PageData{
-                        Title:      "Transportation Portal - Forgot Password",
-                        Success:    "Password reset instructions sent to your email",
-                        IsLoggedIn: false,
-                }
-                renderTemplate(w, "forgot.html", data)
-        } else {
-                data := PageData{
-                        Title:      "Transportation Portal - Forgot Password",
-                        IsLoggedIn: false,
-                }
-                
-                // Check if error message is passed
-                if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-                        data.Error = errMsg
-                }
-                
-                renderTemplate(w, "forgot.html", data)
-        }
+// Register handler - Render registration page
+func registerHandler(c echo.Context) error {
+	data := PageData{
+		Title:      "Register",
+		ActivePage: "register",
+	}
+	return renderTemplate(c, "register.html", data)
 }
 
-// Reset password handler
-func resetPasswordHandler(w http.ResponseWriter, r *http.Request) {
-        // In a real app, this would validate a reset token and allow setting a new password
-        http.Redirect(w, r, "/login?error=Reset functionality not implemented in demo", http.StatusSeeOther)
+// Basic Register Handler - Process registration form
+func basicRegisterHandler(c echo.Context) error {
+	username := strings.TrimSpace(c.FormValue("username"))
+	password := c.FormValue("password")
+	ipAddress := c.RealIP()
+
+	if username == "" || password == "" {
+		return renderTemplate(c, "register.html", PageData{Title: "Register", Error: "Username and password cannot be empty.", ActivePage: "register"})
+	}
+	if len(password) < 8 {
+		return renderTemplate(c, "register.html", PageData{Title: "Register", Error: "Password must be at least 8 characters long.", ActivePage: "register"})
+	}
+
+	_, err := db.GetUserByUsername(username)
+	if err == nil {
+		return renderTemplate(c, "register.html", PageData{Title: "Register", Error: "Username already taken.", ActivePage: "register"})
+	}
+	if err != sql.ErrNoRows {
+		log.Printf("Error checking username %s existence: %v", username, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking username.")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error processing registration.")
+	}
+
+	userID, err := db.AddUser(username, string(hashedPassword))
+	if err != nil {
+		log.Printf("Error creating user %s: %v", username, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create user.")
+	}
+
+	log.Printf("User %s (ID: %d) registered successfully from %s", username, userID, ipAddress)
+	return c.Redirect(http.StatusSeeOther, "/login?success=Registration successful! Please log in.")
 }
 
-// Health check handler
-func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusOK)
-        w.Write([]byte(`{"status":"ok"}`))
+// Forgot Password handler - Render/Process forgot password form
+func forgotHandler(c echo.Context) error {
+	if c.Request().Method == http.MethodPost {
+		emailOrUsername := c.FormValue("email")
+
+		userRow, err := db.GetUserByUsername(emailOrUsername)
+		if err != nil {
+			log.Printf("Password reset request failed: Error finding user %s: %v", emailOrUsername, err)
+			return renderTemplate(c, "forgot.html", PageData{Title: "Forgot Password", Success: "If an account exists for that username, a password reset link has been simulated.", ActivePage: "forgot"})
+		}
+
+		var userID int
+		var storedUsername string
+		var passwordHash string
+		err = userRow.Scan(&userID, &storedUsername, &passwordHash)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Printf("Password reset request: User %s not found", emailOrUsername)
+				return renderTemplate(c, "forgot.html", PageData{Title: "Forgot Password", Success: "If an account exists for that username, a password reset link has been simulated.", ActivePage: "forgot"})
+			}
+			log.Printf("Password reset request failed: Error scanning user %s: %v", emailOrUsername, err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error processing request.")
+		}
+
+		token, err := storeResetToken(userID)
+		if err != nil {
+			log.Printf("Error storing reset token for user ID %d: %v", userID, err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error processing request.")
+		}
+
+		resetLink := fmt.Sprintf("%s/reset/%s", c.Request().Host, token)
+		log.Printf("Password reset requested for user %s (ID: %d). Simulated email sent. Reset link: http://%s", storedUsername, userID, resetLink)
+
+		return renderTemplate(c, "forgot.html", PageData{Title: "Forgot Password", Success: "Password reset simulation complete. Check logs for the reset link.", ActivePage: "forgot"})
+	}
+
+	data := PageData{
+		Title:      "Forgot Password",
+		ActivePage: "forgot",
+	}
+	return renderTemplate(c, "forgot.html", data)
 }
 
-// Logout handler
-func logoutHandler(w http.ResponseWriter, r *http.Request) {
-        // In a full application, you would invalidate the session here
-        // For our simple implementation, we just redirect to login
-        http.Redirect(w, r, "/login?success=Successfully logged out", http.StatusSeeOther)
+// Show Reset Password Form handler
+func showResetFormHandler(c echo.Context) error {
+	token := c.Param("token")
+	userID, valid := validateResetToken(token)
+
+	if !valid {
+		log.Printf("Invalid or expired reset token presented: %s", token)
+		return c.Redirect(http.StatusSeeOther, "/forgot?error=Invalid or expired reset link.")
+	}
+
+	log.Printf("Showing password reset form for valid token %s (User ID: %d)", token, userID)
+	data := PageData{
+		Title:      "Reset Password",
+		ActivePage: "reset",
+		ResetToken: token,
+	}
+	return renderTemplate(c, "reset_password.html", data)
 }
 
-// Register handler - For user registration
-func basicRegisterHandler(w http.ResponseWriter, r *http.Request) {
-        if r.Method == "POST" {
-                // Parse form
-                if err := r.ParseForm(); err != nil {
-                        http.Redirect(w, r, "/register?error=Error processing form", http.StatusSeeOther)
-                        return
-                }
+// Handle Reset Password Submission handler
+func handleResetPasswordHandler(c echo.Context) error {
+	token := c.Param("token")
+	newPassword := c.FormValue("password")
+	confirmPassword := c.FormValue("confirm_password")
 
-                username := strings.TrimSpace(r.FormValue("username"))
-                password := strings.TrimSpace(r.FormValue("password"))
-                confirmPassword := strings.TrimSpace(r.FormValue("confirmPassword"))
+	userID, valid := validateResetToken(token)
+	if !valid {
+		log.Printf("Password reset attempt with invalid/expired token: %s", token)
+		return c.Redirect(http.StatusSeeOther, "/forgot?error=Invalid or expired reset link.")
+	}
 
-                // Validate input
-                if username == "" || password == "" || confirmPassword == "" {
-                        http.Redirect(w, r, "/register?error=All fields are required", http.StatusSeeOther)
-                        return
-                }
+	if newPassword == "" || newPassword != confirmPassword {
+		log.Printf("Password reset failed for token %s: Passwords do not match or are empty.", token)
+		data := PageData{
+			Title:      "Reset Password",
+			Error:      "Passwords do not match or are empty.",
+			ResetToken: token,
+		}
+		return renderTemplate(c, "reset_password.html", data)
+	}
+	if len(newPassword) < 8 {
+		data := PageData{
+			Title:      "Reset Password",
+			Error:      "Password must be at least 8 characters long.",
+			ResetToken: token,
+		}
+		return renderTemplate(c, "reset_password.html", data)
+	}
 
-                if password != confirmPassword {
-                        http.Redirect(w, r, "/register?error=Passwords do not match", http.StatusSeeOther)
-                        return
-                }
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Error hashing new password for user ID %d: %v", userID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error processing password reset.")
+	}
 
-                // Check if user already exists
-                exists, err := db.UserExists(username)
-                if err != nil {
-                        fmt.Printf("Error checking if user exists: %v\n", err)
-                        http.Redirect(w, r, "/register?error=System error, please try again", http.StatusSeeOther)
-                        return
-                }
-                
-                if exists {
-                        http.Redirect(w, r, "/register?error=Username already exists", http.StatusSeeOther)
-                        return
-                }
-                
-                // Create the user in the database
-                err = db.CreateUser(username, password)
-                if err != nil {
-                        fmt.Printf("Error creating user: %v\n", err)
-                        http.Redirect(w, r, "/register?error=Failed to create user: "+err.Error(), http.StatusSeeOther)
-                        return
-                }
-                
-                // Log the successful registration
-                ipAddress := r.RemoteAddr
-                if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-                        ipAddress = ip
-                }
-                db.LogLoginAttempt(username, true, ipAddress)
-                
-                http.Redirect(w, r, "/login?success=Registration successful! Please log in", http.StatusSeeOther)
-        } else {
-                data := PageData{
-                        Title:      "Transportation Portal - Register",
-                        ActivePage: "register",
-                        IsLoggedIn: false,
-                }
+	err = db.UpdateUserPassword(userID, string(hashedPassword))
+	if err != nil {
+		log.Printf("Error updating password in DB for user ID %d: %v", userID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update password.")
+	}
 
-                // Check if error or success message is passed
-                if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-                        data.Error = errMsg
-                }
-                if successMsg := r.URL.Query().Get("success"); successMsg != "" {
-                        data.Success = successMsg
-                }
+	invalidateResetToken(token)
 
-                renderTemplate(w, "register.html", data)
-        }
+	log.Printf("Password successfully reset for user ID %d using token %s", userID, token)
+	return c.Redirect(http.StatusSeeOther, "/login?success=Password successfully reset. Please log in.")
 }
+
+// Health Check handler
+func healthCheckHandler(c echo.Context) error {
+	if err := db.DB.Ping(); err != nil {
+		log.Printf("Health check failed: DB ping error: %v", err)
+		return c.String(http.StatusServiceUnavailable, "Database connection failed")
+	}
+	return c.String(http.StatusOK, "OK")
+}
+
+// Logout handler (simple redirect for demo)
+func logoutHandler(c echo.Context) error {
+	log.Printf("User logged out.")
+	return c.Redirect(http.StatusSeeOther, "/login?success=Successfully logged out.")
+}
+
+// Simple validation helpers (replace with a proper validation library if needed)
+func isValidEmail(email string) bool {
+	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	return re.MatchString(email)
+}
+
+// --- End Handlers ---
