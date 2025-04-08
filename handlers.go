@@ -340,28 +340,37 @@ func basicRegisterHandler(c echo.Context) error {
 		return renderTemplate(c, "register.html", PageData{Title: "Register", Error: "Password must be at least 8 characters long.", ActivePage: "register"})
 	}
 
-	_, err := db.GetUserByUsername(username)
-	if err == nil {
+	// Check if user exists
+	row, err := db.GetUserByUsername(username)
+	// Need to scan the row to trigger the actual error (sql.ErrNoRows)
+	var userID int
+	var storedUsername string
+	var passwordHash string
+	scanErr := row.Scan(&userID, &storedUsername, &passwordHash)
+
+	if scanErr == nil {
+		// User exists
 		return renderTemplate(c, "register.html", PageData{Title: "Register", Error: "Username already taken.", ActivePage: "register"})
 	}
-	if err != sql.ErrNoRows {
-		log.Printf("Error checking username %s existence: %v", username, err)
+	if scanErr != sql.ErrNoRows {
+		log.Printf("Error checking username %s existence: %v", username, scanErr)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking username.")
 	}
 
+	// User doesn't exist, continue with registration
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Error hashing password: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error processing registration.")
 	}
 
-	userID, err := db.AddUser(username, string(hashedPassword))
+	newUserID, err := db.AddUser(username, string(hashedPassword))
 	if err != nil {
 		log.Printf("Error creating user %s: %v", username, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create user.")
 	}
 
-	log.Printf("User %s (ID: %d) registered successfully from %s", username, userID, ipAddress)
+	log.Printf("User %s (ID: %d) registered successfully from %s", username, newUserID, ipAddress)
 	return c.Redirect(http.StatusSeeOther, "/login?success=Registration successful! Please log in.")
 }
 

@@ -67,6 +67,33 @@ case "$1" in
         check_running
         echo "Starting application..."
         docker compose up -d --build
+        echo "Waiting for application to become healthy..."
+        # Wait up to 60 seconds for the app service to be healthy
+        for i in {1..12}; do
+            if docker compose ps app | grep -q '\(healthy\)'; then
+                echo "Application is healthy."
+                break
+            fi
+            echo "Still waiting for app service... ($i/12)"
+            sleep 5
+        done
+
+        if ! docker compose ps app | grep -q '\(healthy\)'; then
+            echo "Application did not become healthy after 60 seconds."
+            docker compose logs app
+            exit 1
+        fi
+
+        echo "Testing /health endpoint from within the container..."
+        # Use docker compose exec to run the check inside the app container
+        if docker compose exec app wget --spider --quiet --tries=3 --timeout=5 http://localhost:8080/health; then
+            echo "Endpoint /health test successful (from container)."
+        else
+            echo "Endpoint /health test failed (from container)."
+            docker compose logs app
+            exit 1
+        fi
+
         echo "Application started successfully."
         echo "Access the application at http://localhost:8080"
         ;;
