@@ -29,3 +29,8 @@ attached_assets
 
 # Go build cache
 .cache
+
+# Additional files to exclude
+README.md
+postgres_data/
+*.log

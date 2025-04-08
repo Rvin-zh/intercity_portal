@@ -1,24 +1,37 @@
-FROM golang:1.20
-
-# Set DNS servers to use Google's public DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
-
-# Set environment variables to disable network dependency during build
-ENV GOPROXY=off
-ENV GOSUMDB=off
-ENV CGO_ENABLED=0
+# Build stage
+FROM golang:1.23 AS builder
 
 WORKDIR /app
 
-# Copy the entire application
+# Set environment variables for Go
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GO111MODULE=on
+ENV CGO_ENABLED=0
+
+# Copy go mod and sum files
+COPY go.mod go.sum ./
+
+# Download dependencies with retry logic
+RUN for i in 1 2 3 4 5; do go mod download && break || sleep 5; done
+
+# Copy source code
 COPY . .
 
-# Build the application using the vendored dependencies
-RUN go build -mod=vendor -o main .
+# Build the application with static linking
+RUN go build -a -ldflags '-extldflags "-static"' -o main .
 
-# Expose port 5000
-EXPOSE 5000
+# Final stage
+FROM alpine:3.19
 
-# Command to run the executable
+WORKDIR /app
+
+# Copy the binary from builder
+COPY --from=builder /app/main .
+COPY --from=builder /app/templates ./templates
+COPY --from=builder /app/static ./static
+
+# Expose port 8080
+EXPOSE 8080
+
+# Run the application
 CMD ["./main"]

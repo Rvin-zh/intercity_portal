@@ -1,43 +1,64 @@
+version: "3.8"
+
 services:
   app:
-    container_name: go-transport-app
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - GOPROXY=direct
-        - GOSUMDB=off
+    build: .
     ports:
-      - "5000:5000"
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=transport_db
     depends_on:
-      - db
-    env_file:
-      - .env
+      db:
+        condition: service_healthy
     networks:
-      - transport-network
-    restart: unless-stopped
+      app-network:
+        aliases:
+          - app-service
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
   db:
-    container_name: go-transport-db
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=transport
+      - POSTGRES_DB=transport_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - transport-network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
-
-networks:
-  transport-network:
-    driver: bridge
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
