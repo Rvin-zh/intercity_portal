@@ -30,7 +30,7 @@ nohup.out
 
 # Electron specific
 electron-app/node_modules/
-electron-app/dist/
+# electron-app/dist/  # Commented out to allow dist folder
 electron-app/.env
 
 # Temporary files
