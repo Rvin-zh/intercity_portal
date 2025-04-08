@@ -1,0 +1,6 @@
+*.AppImage filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text
+electron-app/dist/linux-unpacked/secure-sign-in-app filter=lfs diff=lfs merge=lfs -text
+electron-app/dist/Secure\ Sign\ In-1.0.0.AppImage filter=lfs diff=lfs merge=lfs -text
+electron-app/dist/Secure\ Sign\ In\ Setup\ 1.0.0.exe filter=lfs diff=lfs merge=lfs -text
+electron-app/dist/Secure\ Sign\ In\ 1.0.0.exe filter=lfs diff=lfs merge=lfs -text

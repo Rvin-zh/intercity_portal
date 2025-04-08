@@ -30,8 +30,21 @@ nohup.out
 
 # Electron specific
 electron-app/node_modules/
-electron-app/dist/*
+electron-app/dist/
+# Remove the wildcard to ensure we ignore the entire dist directory
+# electron-app/dist/*
 electron-app/.env
+
+# Specific large files
+**/secure-sign-in-app
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.tar.gz
+*.tar.xz
+*.dmg
+*.exe
 
 # Temporary files
 *.tmp
