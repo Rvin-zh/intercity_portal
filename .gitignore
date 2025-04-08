@@ -31,8 +31,8 @@ nohup.out
 # Electron specific
 electron-app/node_modules/
 electron-app/dist/
-# Remove the wildcard to ensure we ignore the entire dist directory
-# electron-app/dist/*
+# Explicitly excluding dist directory with all contents
+electron-app/dist/**
 electron-app/.env
 
 # Specific large files
