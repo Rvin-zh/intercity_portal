@@ -278,15 +278,34 @@ func loginHandler(c echo.Context) error {
 
 // Auth handler - Process login form
 func basicAuthHandler(c echo.Context) error {
-	username := strings.TrimSpace(c.FormValue("username"))
-	password := strings.TrimSpace(c.FormValue("password"))
-	ipAddress := c.RealIP()
+	username := c.FormValue("username")
+	password := c.FormValue("password")
 
+	// Validate input
+	if username == "" || password == "" {
+		data := PageData{
+			Title:      "Login",
+			Error:      "Please enter both username and password",
+			Username:   username, // Preserve the username
+			ActivePage: "login",
+		}
+		return renderTemplate(c, "login.html", data)
+	}
+
+	// Get user from database
 	userRow, err := db.GetUserByUsername(username)
 	if err != nil {
-		log.Printf("Error querying user %s: %v", username, err)
-		db.LogLoginAttempt(0, ipAddress, false)
-		return c.Redirect(http.StatusSeeOther, "/login?error=Invalid credentials")
+		if err == sql.ErrNoRows {
+			data := PageData{
+				Title:      "Login",
+				Error:      "Invalid username or password",
+				Username:   username, // Preserve the username
+				ActivePage: "login",
+			}
+			return renderTemplate(c, "login.html", data)
+		}
+		log.Printf("Error getting user: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "An error occurred. Please try again.")
 	}
 
 	var userID int
@@ -295,25 +314,24 @@ func basicAuthHandler(c echo.Context) error {
 
 	err = userRow.Scan(&userID, &storedUsername, &passwordHash)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Printf("Login attempt failed: User %s not found", username)
-			db.LogLoginAttempt(0, ipAddress, false)
-			return c.Redirect(http.StatusSeeOther, "/login?error=Invalid credentials")
-		}
-		log.Printf("Error scanning user row for %s: %v", username, err)
-		db.LogLoginAttempt(0, ipAddress, false)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error processing login.")
+		log.Printf("Error scanning user row: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "An error occurred. Please try again.")
 	}
 
+	// Compare password
 	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
 	if err != nil {
-		log.Printf("Login attempt failed: Invalid password for user %s (ID: %d)", username, userID)
-		db.LogLoginAttempt(userID, ipAddress, false)
-		return c.Redirect(http.StatusSeeOther, "/login?error=Invalid credentials")
+		data := PageData{
+			Title:      "Login",
+			Error:      "Invalid username or password",
+			Username:   username, // Preserve the username
+			ActivePage: "login",
+		}
+		return renderTemplate(c, "login.html", data)
 	}
 
-	log.Printf("User %s (ID: %d) logged in successfully from %s", username, userID, ipAddress)
-	db.LogLoginAttempt(userID, ipAddress, true)
+	log.Printf("User %s (ID: %d) logged in successfully from %s", username, userID, c.RealIP())
+	db.LogLoginAttempt(userID, c.RealIP(), true)
 
 	return c.Redirect(http.StatusSeeOther, "/dashboard?success=Successfully logged in&user="+username)
 }
