@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# Master build script for the Secure Sign In Desktop Application
-# This script builds the Go backend and packages the Electron app for Linux and Windows
-# Automatically installs dependencies if needed
+# Linux Build Script for Secure Sign In Application
+# This script automatically installs dependencies and builds the application for Linux
 
 set -e  # Exit on any error
 
-# Display current working directory
-echo "Current directory: $(pwd)"
+echo "Starting Linux build process..."
 
 # Check if running from the electron-app directory
 if [[ "$(basename "$(pwd)")" != "electron-app" ]]; then
@@ -62,29 +60,6 @@ install_go_linux() {
   fi
 }
 
-# Function to install Wine on Linux (for Windows builds)
-install_wine_linux() {
-  echo "Installing Wine for Windows builds..."
-  
-  # Check if we can use apt (Debian/Ubuntu)
-  if command -v apt &> /dev/null; then
-    sudo apt update
-    sudo apt install -y wine64
-  # Check if we can use dnf (Fedora)
-  elif command -v dnf &> /dev/null; then
-    sudo dnf install -y wine
-  # Check if we can use yum (CentOS/RHEL)
-  elif command -v yum &> /dev/null; then
-    sudo yum install -y wine
-  # Check if we can use pacman (Arch)
-  elif command -v pacman &> /dev/null; then
-    sudo pacman -Sy wine
-  else
-    echo "Couldn't detect package manager. Windows builds may fail without Wine."
-    # Continue anyway
-  fi
-}
-
 # Check if Node.js and npm are installed, install if not
 if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
   echo "Node.js or npm not found. Installing..."
@@ -112,7 +87,7 @@ fi
 echo "Dependencies installed successfully."
 
 # Build the Go backend
-echo "Building Go backend for Linux and Windows..."
+echo "Building Go backend for Linux..."
 chmod +x build-backend.sh
 ./build-backend.sh
 if [ $? -ne 0 ]; then
@@ -121,46 +96,19 @@ if [ $? -ne 0 ]; then
 fi
 echo "Go backend built successfully."
 
-# Check which platforms to build for
-BUILD_LINUX=1
-BUILD_WINDOWS=1
-
-# Check if Wine is installed if building for Windows, install if not found
-if [ $BUILD_WINDOWS -eq 1 ] && ! command -v wine &> /dev/null; then
-  echo "Wine not found. Installing Wine for Windows builds..."
-  install_wine_linux
-fi
-
-# Package the application
-echo "Packaging the application..."
-
-if [ $BUILD_LINUX -eq 1 ] && [ $BUILD_WINDOWS -eq 1 ]; then
-  # Build for both platforms
-  echo "Building for both Linux and Windows..."
-  npm run package-all
-elif [ $BUILD_LINUX -eq 1 ]; then
-  # Build for Linux only
-  echo "Building for Linux only..."
-  npm run package-linux
-elif [ $BUILD_WINDOWS -eq 1 ]; then
-  # Build for Windows only
-  echo "Building for Windows only..."
-  npm run package-win
-else
-  echo "No platforms selected for building. Exiting."
-  exit 1
-fi
-
+# Package the application for Linux
+echo "Packaging the application for Linux..."
+npm run package-linux
 if [ $? -ne 0 ]; then
   echo "Failed to package the application."
   exit 1
 fi
 
 echo "Application packaged successfully."
-echo "The packaged applications can be found in the dist/ directory."
+echo "The packaged application can be found in the dist/ directory."
 
 # List the contents of the dist directory
 echo "Contents of the dist directory:"
 ls -la dist/
 
-echo "Build process completed successfully!" 
+echo "Linux build process completed successfully!" 
