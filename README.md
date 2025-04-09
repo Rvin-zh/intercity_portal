@@ -101,3 +101,114 @@ docker-compose up --build
 ## License
 
 This project is licensed under the MIT License.
+
+# Secure Sign In
+
+A secure desktop application for user authentication and management.
+
+## Features
+
+- Secure user authentication
+- Password reset with identity verification
+- Login history tracking
+- User management dashboard
+- Cross-platform support (Linux, Windows, macOS)
+
+## Building the Application
+
+### Prerequisites
+
+- Node.js (v16 or later)
+- Go (v1.16 or later)
+- Git
+
+### Build Scripts
+
+The application provides several build scripts for different platforms:
+
+1. **Automatic Build (Recommended)**
+
+   ```bash
+   cd electron-app
+   ./builder.sh
+   ```
+
+   This script automatically detects your operating system and builds the appropriate package.
+
+2. **Manual Build Options**
+   - For Linux (AppImage):
+     ```bash
+     cd electron-app
+     ./build-linux.sh
+     ```
+   - For Windows (Portable and NSIS):
+     ```bash
+     cd electron-app
+     ./build-windows.sh
+     ```
+   - For macOS:
+     ```bash
+     cd electron-app
+     ./build-mac.sh
+     ```
+
+### Build Output
+
+- Linux: `dist/Secure Sign In-1.0.0.AppImage`
+- Windows: `dist/Secure Sign In Setup 1.0.0.exe` and `dist/Secure Sign In-1.0.0-win.exe`
+- macOS: `dist/Secure Sign In-1.0.0.dmg`
+
+## Installation
+
+### Linux
+
+1. Make the AppImage executable:
+   ```bash
+   chmod +x "Secure Sign In-1.0.0.AppImage"
+   ```
+2. Run the application:
+   ```bash
+   ./"Secure Sign In-1.0.0.AppImage"
+   ```
+
+### Windows
+
+1. Run the NSIS installer (`Secure Sign In Setup 1.0.0.exe`)
+2. Follow the installation wizard
+3. The application will be installed in your Program Files directory
+
+### macOS
+
+1. Open the DMG file
+2. Drag the application to your Applications folder
+3. Run from Applications
+
+## Development
+
+### Running in Development Mode
+
+```bash
+cd electron-app
+npm run dev
+```
+
+### Project Structure
+
+- `electron-app/`: Electron frontend application
+- `db/`: Database management
+- `templates/`: HTML templates
+- `handlers/`: Request handlers
+- `static/`: Static assets (CSS, JS, images)
+
+## Security Features
+
+- Password hashing with bcrypt
+- Secure password reset with identity verification
+- Login attempt tracking
+- SQLite database with WAL mode
+- Cross-site request forgery protection
+- Secure session management
+
+## License
+
+MIT License
