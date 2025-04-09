@@ -96,6 +96,22 @@ if [ $? -ne 0 ]; then
 fi
 echo "Go backend built successfully."
 
+# Ensure backend has proper permissions
+echo "Setting correct permissions for backend executable..."
+cd ..
+chmod +x main
+mkdir -p keys
+chmod -R 755 templates static
+cd electron-app
+echo "Permissions set successfully."
+
+# Create necessary directories if they don't exist
+echo "Ensuring necessary directories exist..."
+if [ ! -d "../keys" ]; then
+  mkdir -p "../keys"
+  echo "Created keys directory"
+fi
+
 # Package the application for Linux
 echo "Packaging the application for Linux..."
 npm run package-linux
@@ -110,5 +126,12 @@ echo "The packaged application can be found in the dist/ directory."
 # List the contents of the dist directory
 echo "Contents of the dist directory:"
 ls -la dist/
+
+# Make AppImage executable
+if ls dist/*.AppImage 1>/dev/null 2>&1; then
+  echo "Setting executable permission on AppImage file..."
+  chmod +x dist/*.AppImage
+  echo "AppImage is now ready to run."
+fi
 
 echo "Linux build process completed successfully!" 

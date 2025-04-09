@@ -26,27 +26,24 @@
     ],
     "extraResources": [
       {
-        "from": "../",
-        "to": "backend",
-        "filter": [
-          "**/*",
-          "!electron-app/**",
-          "!.git/**",
-          "!node_modules/**",
-          "!**/*.go",
-          "!**/*.mod",
-          "!**/*.sum",
-          "!Dockerfile",
-          "!docker-compose.yml",
-          "!.dockerignore",
-          "!DOCKER_README.md",
-          "!replit.nix",
-          "!.replit",
-          "!test_db.sh",
-          "!run.sh",
-          "!nohup.out",
-          "!temp_image.html"
-        ]
+        "from": "../main",
+        "to": "backend/main"
+      },
+      {
+        "from": "../main.exe",
+        "to": "backend/main.exe"
+      },
+      {
+        "from": "../templates",
+        "to": "backend/templates"
+      },
+      {
+        "from": "../static",
+        "to": "backend/static"
+      },
+      {
+        "from": "../keys",
+        "to": "backend/keys"
       }
     ],
     "linux": {

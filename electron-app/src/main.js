@@ -55,10 +55,23 @@ async function startBackend() {
   const backendPath = getBackendPath();
   const backendDirectory = path.dirname(backendPath);
   const sqliteDbPath = path.join(app.getPath('userData'), 'securesignin.db');
+  const keyDirectory = path.join(backendDirectory, 'keys');
 
   console.log(`Backend executable path: ${backendPath}`);
   console.log(`Backend working directory: ${backendDirectory}`);
   console.log(`SQLite database path: ${sqliteDbPath}`);
+  console.log(`Key directory path: ${keyDirectory}`);
+
+  // Ensure key directory exists
+  if (!fs.existsSync(keyDirectory)) {
+    console.log('Creating key directory...');
+    try {
+      fs.mkdirSync(keyDirectory, { recursive: true });
+      console.log('Key directory created successfully.');
+    } catch (error) {
+      console.error(`Error creating key directory: ${error.message}`);
+    }
+  }
 
   if (!fs.existsSync(backendPath)) {
     const errorMsg = `Backend executable not found at: ${backendPath}`;
@@ -67,6 +80,22 @@ async function startBackend() {
       `\n\nWindows troubleshooting:\n1. Check if antivirus is blocking the executable\n2. Ensure you have proper permissions\n3. Try running as administrator`);
     app.quit();
     return false; // Indicate failure
+  }
+
+  // Check backend executable permissions
+  try {
+    fs.accessSync(backendPath, fs.constants.X_OK);
+    console.log('Backend executable has execute permissions.');
+  } catch (error) {
+    console.warn(`Backend executable doesn't have execute permissions. Attempting to fix...`);
+    if (os.platform() !== 'win32') { // Windows doesn't use the same permission model
+      try {
+        fs.chmodSync(backendPath, 0o755); // Set execute permissions
+        console.log('Execute permissions set on backend executable.');
+      } catch (chmodErr) {
+        console.error(`Failed to set execute permissions: ${chmodErr.message}`);
+      }
+    }
   }
 
   // Check if backend is already running (less likely now, but good practice)
@@ -89,6 +118,7 @@ async function startBackend() {
         ...process.env, // Inherit environment
         USE_SQLITE: '1', // Tell backend to use SQLite
         SQLITE_PATH: sqliteDbPath, // Provide path for the db file
+        KEY_DIR: keyDirectory // Specify key directory path
       }
     });
 
