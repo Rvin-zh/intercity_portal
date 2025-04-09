@@ -9,6 +9,8 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=transport_db
+    volumes:
+      - encryption_keys:/app/keys
     depends_on:
       db:
         condition: service_healthy
@@ -56,6 +58,7 @@ services:
 
 volumes:
   postgres_data:
+  encryption_keys:
 
 networks:
   app-network:
