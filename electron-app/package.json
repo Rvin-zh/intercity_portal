@@ -31,19 +31,22 @@
       },
       {
         "from": "../main.exe",
-        "to": "backend/main.exe"
+        "to": "backend/main.exe",
+        "filter": ["!**/node_modules/**"]
       },
       {
         "from": "../templates",
-        "to": "backend/templates"
+        "to": "backend/templates",
+        "filter": ["**/*"]
       },
       {
         "from": "../static",
-        "to": "backend/static"
+        "to": "backend/static",
+        "filter": ["**/*"]
       },
       {
-        "from": "../keys",
-        "to": "backend/keys"
+        "from": "../keys/encryption.key",
+        "to": "backend/keys/encryption.key"
       }
     ],
     "linux": {

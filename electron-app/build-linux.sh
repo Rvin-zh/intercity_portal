@@ -100,17 +100,32 @@ echo "Go backend built successfully."
 echo "Setting correct permissions for backend executable..."
 cd ..
 chmod +x main
-mkdir -p keys
-chmod -R 755 templates static
 cd electron-app
 echo "Permissions set successfully."
 
-# Create necessary directories if they don't exist
-echo "Ensuring necessary directories exist..."
-if [ ! -d "../keys" ]; then
-  mkdir -p "../keys"
-  echo "Created keys directory"
+# Create necessary directories and encryption keys
+echo "Setting up encryption keys and directories..."
+cd ..
+mkdir -p keys
+chmod 700 keys
+
+# Copy the existing encryption key - never generate a new one
+# Check if encryption key exists in the project root
+if [ ! -f "keys/encryption.key" ]; then
+  echo "ERROR: No encryption key found at keys/encryption.key"
+  echo "Please ensure you have a valid encryption key before building!"
+  echo "Keys should be 32 bytes (256 bits) in length."
+  exit 1
+else
+  echo "Using existing encryption key."
+  chmod 600 keys/encryption.key
 fi
+
+# Ensure templates and static directories have correct permissions
+chmod -R 755 templates static
+
+cd electron-app
+echo "Encryption key verified successfully."
 
 # Package the application for Linux
 echo "Packaging the application for Linux..."

@@ -56,11 +56,13 @@ async function startBackend() {
   const backendDirectory = path.dirname(backendPath);
   const sqliteDbPath = path.join(app.getPath('userData'), 'securesignin.db');
   const keyDirectory = path.join(backendDirectory, 'keys');
+  const keyFilePath = path.join(keyDirectory, 'encryption.key');
 
   console.log(`Backend executable path: ${backendPath}`);
   console.log(`Backend working directory: ${backendDirectory}`);
   console.log(`SQLite database path: ${sqliteDbPath}`);
   console.log(`Key directory path: ${keyDirectory}`);
+  console.log(`Encryption key path: ${keyFilePath}`);
 
   // Ensure key directory exists
   if (!fs.existsSync(keyDirectory)) {
@@ -71,6 +73,16 @@ async function startBackend() {
     } catch (error) {
       console.error(`Error creating key directory: ${error.message}`);
     }
+  }
+
+  // Check if encryption key exists
+  if (!fs.existsSync(keyFilePath)) {
+    const errorMsg = `Encryption key not found at: ${keyFilePath}`;
+    console.error(errorMsg);
+    dialog.showErrorBox('Encryption Key Error', 
+      `${errorMsg}\n\nPlease ensure the encryption key file exists at 'keys/encryption.key' in the application resources.`);
+    app.quit();
+    return false; // Indicate failure
   }
 
   if (!fs.existsSync(backendPath)) {
@@ -118,7 +130,8 @@ async function startBackend() {
         ...process.env, // Inherit environment
         USE_SQLITE: '1', // Tell backend to use SQLite
         SQLITE_PATH: sqliteDbPath, // Provide path for the db file
-        KEY_DIR: keyDirectory // Specify key directory path
+        KEY_DIR: keyDirectory, // Specify key directory path
+        KEY_FILE: keyFilePath // Direct path to the encryption key
       }
     });
 
@@ -147,7 +160,7 @@ async function startBackend() {
         let errorMsg = `The backend server stopped unexpectedly (code: ${code}).`;
         
         if (os.platform() === 'win32') {
-          errorMsg += `\n\nWindows troubleshooting:\n- Check if Windows Firewall is blocking network access\n- Verify SQLite database path is accessible: ${sqliteDbPath}\n- Run the app as administrator`;
+          errorMsg += `\n\nWindows troubleshooting:\n- Check if Windows Firewall is blocking network access\n- Verify SQLite database path is accessible: ${sqliteDbPath}\n- Verify encryption key exists at: ${keyFilePath}\n- Run the app as administrator`;
         }
         
         dialog.showErrorBox('Backend Error', errorMsg);

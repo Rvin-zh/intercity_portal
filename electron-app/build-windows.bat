@@ -111,6 +111,28 @@ if %ERRORLEVEL% neq 0 (
 )
 echo Go backend built successfully.
 
+REM Set up encryption keys and directories
+echo Setting up encryption keys and directories...
+cd ..
+if not exist keys (
+    mkdir keys
+    echo Created keys directory.
+)
+
+REM Check for existing encryption key - never generate a new one
+if not exist keys\encryption.key (
+    echo ERROR: No encryption key found at keys\encryption.key
+    echo Please ensure you have a valid encryption key before building!
+    echo Keys should be 32 bytes (256 bits) in length.
+    exit /b 1
+) else (
+    echo Using existing encryption key.
+)
+
+REM Return to electron-app directory
+cd electron-app
+echo Encryption key verified successfully.
+
 REM Package the application for Windows
 echo Packaging the application for Windows...
 call npm run package-win
