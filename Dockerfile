@@ -37,6 +37,9 @@ COPY --from=builder /app/main .
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/static ./static
 
+# Install curl
+# RUN apk --no-cache add curl <-- Commented out due to network issues
+RUN apk --no-cache add curl
 # Expose the port the app runs on
 EXPOSE 8080
 

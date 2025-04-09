@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Handle password visibility toggle for all password fields
-    const setupPasswordToggle = function(passwordId, toggleId) {
+    window.setupPasswordToggle = function(passwordId, toggleId) {
         const passwordField = document.getElementById(passwordId);
         const toggleButton = document.getElementById(toggleId);
         

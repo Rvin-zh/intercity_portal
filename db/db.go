@@ -70,7 +70,7 @@ func initializeSchema() error {
 	CREATE TABLE IF NOT EXISTS users (
 		id SERIAL PRIMARY KEY,
 		username VARCHAR(255) UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL, -- Included directly
+		password TEXT NOT NULL, -- Included directly
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
 	`

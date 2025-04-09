@@ -308,9 +308,9 @@ func basicAuthHandler(c echo.Context) error {
 	var storedUsername string
 	var storedDOB string // Variable to hold DOB (needed for Scan but not used in login)
 	var storedSSN string // Variable to hold SSN (needed for Scan but not used in login)
-	var passwordHash string
+	var storedPassword string
 
-	err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &passwordHash)
+	err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// User not found
@@ -333,7 +333,7 @@ func basicAuthHandler(c echo.Context) error {
 	}
 
 	// Compare password
-	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
+	err = bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(password))
 	if err != nil {
 		// Log failed login attempt before returning error
 		// We don't have the correct userID if password comparison fails,
@@ -462,9 +462,9 @@ func forgotHandler(c echo.Context) error {
 		var storedUsername string
 		var storedDOB string
 		var storedSSN string
-		var passwordHash string
+		var storedPassword string
 
-		err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &passwordHash)
+		err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Printf("Password reset request: User %s not found", username)
@@ -479,7 +479,21 @@ func forgotHandler(c echo.Context) error {
 		}
 
 		// Verify date of birth and SSN
-		if dob != storedDOB || ssn != storedSSN {
+		log.Printf("DEBUG: Comparing DOB - provided: '%s' stored: '%s'", dob, storedDOB)
+		log.Printf("DEBUG: Comparing SSN - provided: '%s' stored: '%s'", ssn, storedSSN)
+
+		// Handle the timestamp format in the stored DOB
+		storedDOBPrefix := ""
+		if strings.Contains(storedDOB, "T") {
+			storedDOBPrefix = strings.Split(storedDOB, "T")[0]
+		} else {
+			storedDOBPrefix = storedDOB
+		}
+		log.Printf("DEBUG: After splitting, comparing: '%s' with '%s'", dob, storedDOBPrefix)
+
+		// Try both direct comparison and prefix comparison
+		if dob != storedDOBPrefix && dob != storedDOB && !strings.HasPrefix(storedDOB, dob) {
+			log.Printf("DEBUG: All DOB comparisons failed")
 			log.Printf("Password reset failed: Invalid DOB or SSN for user %s", username)
 			return renderTemplate(c, "forgot.html", PageData{
 				Title:      "Forgot Password",
@@ -487,6 +501,19 @@ func forgotHandler(c echo.Context) error {
 				ActivePage: "forgot",
 			})
 		}
+
+		if ssn != storedSSN {
+			log.Printf("DEBUG: SSN comparison failed")
+			log.Printf("Password reset failed: Invalid DOB or SSN for user %s", username)
+			return renderTemplate(c, "forgot.html", PageData{
+				Title:      "Forgot Password",
+				Error:      "Invalid credentials provided",
+				ActivePage: "forgot",
+			})
+		}
+
+		// If we get here, both DOB and SSN matched
+		log.Printf("DEBUG: DOB and SSN verification succeeded for user %s", username)
 
 		// Generate reset token
 		token, err := storeResetToken(userID)
