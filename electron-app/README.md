@@ -64,10 +64,39 @@ This will create both a portable executable and an NSIS installer in the `dist` 
 npm run package-all
 ```
 
+## Data Preservation
+
+The application includes a robust system to ensure your data is not lost during rebuilds or updates.
+
+### How It Works
+
+- When you run the build scripts (`build-linux.sh`, `build-windows.bat`), your database is automatically backed up
+- After the build completes, your data is restored to the new version
+- The system is intelligent enough to find your database regardless of which version you were using before (Docker, standalone, or Electron)
+- Timestamped backups are created in case you need to restore a previous state
+
+### Backup Locations
+
+- Primary database: `$HOME/.securesignin/securesignin.db` (Linux/macOS) or `%USERPROFILE%\.securesignin\securesignin.db` (Windows)
+- Backup directory: `$HOME/.config/secure-sign-in-app/backups/` (Linux/macOS) or `%USERPROFILE%\.config\secure-sign-in-app\backups\` (Windows)
+
+### Manual Restore
+
+If you ever need to manually restore a backup:
+
+```bash
+# Linux/macOS
+cp ~/.config/secure-sign-in-app/backups/backup-TIMESTAMP.db ~/.securesignin/securesignin.db
+
+# Windows
+copy %USERPROFILE%\.config\secure-sign-in-app\backups\backup-TIMESTAMP.db %USERPROFILE%\.securesignin\securesignin.db
+```
+
 ## Application Structure
 
 - `src/main.js`: Main Electron process that starts the application
 - `backend/`: Contains the Go backend application (included from parent directory)
+- `scripts/`: Contains utility scripts including the data preservation tool
 
 ## How It Works
 
@@ -77,3 +106,4 @@ The application embeds the Go backend executable and runs it as a child process 
 
 - **Backend fails to start**: Check the application logs. You can enable extra logging by setting the environment variable `DEBUG=1`.
 - **Window shows blank screen**: The backend may not have started successfully. Check the application logs.
+- **Data missing after update**: Your data might be in a different location. Check the backup directory and try a manual restore.

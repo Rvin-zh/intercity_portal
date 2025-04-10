@@ -12,6 +12,7 @@ A management application for an intercity terminal, built with Go and featuring 
 - Desktop application support via Electron (Setup complete)
 - Docker support for easy deployment (Existing)
 - Database integration (Existing)
+- Automatic data preservation during updates (New)
 - Terminal Management Features (Planned)
 
 ## Project Structure
@@ -315,3 +316,29 @@ This eliminates the need for users to install and configure a separate database 
 ## License
 
 [License information]
+
+## Data Preservation
+
+This application includes a robust data preservation system that prevents data loss during application updates and rebuilds.
+
+### How It Works
+
+- Before rebuilding the application, user data is automatically backed up
+- After the rebuild, data is restored to all possible database locations
+- Timestamped backups are created for additional safety
+- The system handles different database paths used by:
+  - The Electron desktop application
+  - The Docker container version
+  - The standalone application
+
+### Backup Locations
+
+- Main database: `$HOME/.securesignin/securesignin.db`
+- Backup directory: `$HOME/.config/secure-sign-in-app/backups/`
+
+If you need to manually restore a backup:
+
+```bash
+# Copy a backup to the main database location
+cp ~/.config/secure-sign-in-app/backups/backup-TIMESTAMP.db ~/.securesignin/securesignin.db
+```
