@@ -21,8 +21,6 @@ func InitializeDB() error {
 
 	// Check for a custom database path from environment variable
 	dbPath := os.Getenv("SQLITE_DB_PATH")
-	log.Printf("SQLITE_DB_PATH environment variable: %q", dbPath)
-
 	if dbPath == "" {
 		// Use default path in data directory
 		dataDir := "data"
@@ -33,27 +31,12 @@ func InitializeDB() error {
 		dbPath = filepath.Join(dataDir, "securesignin.db")
 	}
 
-	// Make sure the directory exists
-	dbDir := filepath.Dir(dbPath)
-	log.Printf("Database directory: %s", dbDir)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		log.Printf("Error creating database directory: %v", err)
-		return fmt.Errorf("failed to create database directory: %w", err)
-	}
-
 	log.Printf("Opening SQLite database at: %s", dbPath)
 	// SQLite connection string with WAL journal mode for better concurrency and performance
 	connStr := fmt.Sprintf("%s?_journal=WAL&_timeout=5000&_fk=true", dbPath)
 	DB, err = sql.Open("sqlite3", connStr)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite database: %w", err)
-	}
-
-	// Check if we can actually write to the database
-	_, err = DB.Exec("PRAGMA temp_store = MEMORY")
-	if err != nil {
-		log.Printf("Database write test failed: %v", err)
-		return fmt.Errorf("database write test failed, check permissions: %w", err)
 	}
 
 	// SQLite doesn't need as many connections as PostgreSQL
