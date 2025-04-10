@@ -1,4 +1,6 @@
 @echo off
+setlocal enabledelayedexpansion
+
 REM Windows Build Script for Secure Sign In Application
 REM This script automatically installs dependencies and builds the application
 
@@ -148,6 +150,175 @@ REM List the contents of the dist directory
 echo Contents of the dist directory:
 dir dist
 
+REM Create data preservation script
+echo Creating data preservation script...
+if not exist "scripts" mkdir scripts
+
+REM Create the preserve-data.js script
+if not exist "scripts\preserve-data.js" (
+  echo // Database Preservation Tool > scripts\preserve-data.js
+  echo const fs = require('fs'); >> scripts\preserve-data.js
+  echo const path = require('path'); >> scripts\preserve-data.js
+  echo const os = require('os'); >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Define paths >> scripts\preserve-data.js
+  echo const HOME_DIR = os.homedir(); >> scripts\preserve-data.js
+  echo const DB_PATH = path.join(HOME_DIR, '.securesignin', 'securesignin.db'); >> scripts\preserve-data.js
+  echo const BACKUP_DIR = path.join(HOME_DIR, '.config', 'secure-sign-in-app', 'backups'); >> scripts\preserve-data.js
+  echo const TEMP_BACKUP_PATH = path.join(BACKUP_DIR, 'pre-build-backup.db'); >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Process arguments >> scripts\preserve-data.js
+  echo const args = process.argv.slice(2); >> scripts\preserve-data.js
+  echo const operation = args[0] ^|^| 'backup'; // Default to backup >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Ensure backup directory exists >> scripts\preserve-data.js
+  echo function ensureBackupDirExists() { >> scripts\preserve-data.js
+  echo   if (!fs.existsSync(BACKUP_DIR)) { >> scripts\preserve-data.js
+  echo     fs.mkdirSync(BACKUP_DIR, { recursive: true }); >> scripts\preserve-data.js
+  echo     console.log(`Created backup directory: ${BACKUP_DIR}`); >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Backup the database before build >> scripts\preserve-data.js
+  echo function backupDatabase() { >> scripts\preserve-data.js
+  echo   if (!fs.existsSync(DB_PATH)) { >> scripts\preserve-data.js
+  echo     console.log(`No database found at ${DB_PATH}. Nothing to backup.`); >> scripts\preserve-data.js
+  echo     return false; >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo   ensureBackupDirExists(); >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo   try { >> scripts\preserve-data.js
+  echo     fs.copyFileSync(DB_PATH, TEMP_BACKUP_PATH); >> scripts\preserve-data.js
+  echo     console.log(`Successfully backed up database to ${TEMP_BACKUP_PATH}`); >> scripts\preserve-data.js
+  echo     return true; >> scripts\preserve-data.js
+  echo   } catch (error) { >> scripts\preserve-data.js
+  echo     console.error(`Error backing up database: ${error.message}`); >> scripts\preserve-data.js
+  echo     return false; >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Restore the database after build >> scripts\preserve-data.js
+  echo function restoreDatabase() { >> scripts\preserve-data.js
+  echo   if (!fs.existsSync(TEMP_BACKUP_PATH)) { >> scripts\preserve-data.js
+  echo     console.log(`No backup found at ${TEMP_BACKUP_PATH}. Nothing to restore.`); >> scripts\preserve-data.js
+  echo     return false; >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo   // Ensure the target directory exists >> scripts\preserve-data.js
+  echo   const dbDir = path.dirname(DB_PATH); >> scripts\preserve-data.js
+  echo   if (!fs.existsSync(dbDir)) { >> scripts\preserve-data.js
+  echo     fs.mkdirSync(dbDir, { recursive: true }); >> scripts\preserve-data.js
+  echo     console.log(`Created database directory: ${dbDir}`); >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo   try { >> scripts\preserve-data.js
+  echo     fs.copyFileSync(TEMP_BACKUP_PATH, DB_PATH); >> scripts\preserve-data.js
+  echo     console.log(`Successfully restored database to ${DB_PATH}`); >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo     // Make a timestamp backup as well >> scripts\preserve-data.js
+  echo     const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); >> scripts\preserve-data.js
+  echo     const timestampBackup = path.join(BACKUP_DIR, `backup-${timestamp}.db`); >> scripts\preserve-data.js
+  echo     fs.copyFileSync(TEMP_BACKUP_PATH, timestampBackup); >> scripts\preserve-data.js
+  echo     console.log(`Created timestamped backup at ${timestampBackup}`); >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo     return true; >> scripts\preserve-data.js
+  echo   } catch (error) { >> scripts\preserve-data.js
+  echo     console.error(`Error restoring database: ${error.message}`); >> scripts\preserve-data.js
+  echo     return false; >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Main function >> scripts\preserve-data.js
+  echo function main() { >> scripts\preserve-data.js
+  echo   if (operation === 'backup') { >> scripts\preserve-data.js
+  echo     console.log('=== Backing up database before build ==='); >> scripts\preserve-data.js
+  echo     backupDatabase(); >> scripts\preserve-data.js
+  echo   } else if (operation === 'restore') { >> scripts\preserve-data.js
+  echo     console.log('=== Restoring database after build ==='); >> scripts\preserve-data.js
+  echo     restoreDatabase(); >> scripts\preserve-data.js
+  echo   } else { >> scripts\preserve-data.js
+  echo     console.error(`Unknown operation: ${operation}`); >> scripts\preserve-data.js
+  echo     console.log('Usage: node preserve-data.js [backup^|restore]'); >> scripts\preserve-data.js
+  echo     process.exit(1); >> scripts\preserve-data.js
+  echo   } >> scripts\preserve-data.js
+  echo } >> scripts\preserve-data.js
+  echo. >> scripts\preserve-data.js
+  echo // Run the main function >> scripts\preserve-data.js
+  echo main(); >> scripts\preserve-data.js
+)
+
+REM Backup user data before building
+echo Backing up user data before build...
+node scripts\preserve-data.js backup
+
+REM Create scripts directory in project root
+if not exist "..\scripts" mkdir ..\scripts
+
+REM Create Windows setup script in project root scripts
+if not exist "..\scripts\windows-db-setup.bat" (
+  echo @echo off > ..\scripts\windows-db-setup.bat
+  echo setlocal enabledelayedexpansion >> ..\scripts\windows-db-setup.bat
+  echo. >> ..\scripts\windows-db-setup.bat
+  echo echo === Secure Sign In Database Setup === >> ..\scripts\windows-db-setup.bat
+  echo. >> ..\scripts\windows-db-setup.bat
+  echo REM Set paths >> ..\scripts\windows-db-setup.bat
+  echo set "APP_CONFIG_DIR=%%USERPROFILE%%\.config\secure-sign-in-app" >> ..\scripts\windows-db-setup.bat
+  echo set "USER_HOME_DIR=%%USERPROFILE%%\.securesignin" >> ..\scripts\windows-db-setup.bat
+  echo set "DB_PATH=%%USER_HOME_DIR%%\securesignin.db" >> ..\scripts\windows-db-setup.bat
+  echo set "KEY_PATH=%%USER_HOME_DIR%%\encryption.key" >> ..\scripts\windows-db-setup.bat
+  echo. >> ..\scripts\windows-db-setup.bat
+  echo REM Create all necessary directories >> ..\scripts\windows-db-setup.bat
+  echo echo Creating application directories... >> ..\scripts\windows-db-setup.bat
+  echo if not exist "%%APP_CONFIG_DIR%%" mkdir "%%APP_CONFIG_DIR%%" >> ..\scripts\windows-db-setup.bat
+  echo if not exist "%%USER_HOME_DIR%%" mkdir "%%USER_HOME_DIR%%" >> ..\scripts\windows-db-setup.bat
+  echo if not exist "%%APP_CONFIG_DIR%%\backups" mkdir "%%APP_CONFIG_DIR%%\backups" >> ..\scripts\windows-db-setup.bat
+  echo. >> ..\scripts\windows-db-setup.bat
+  echo REM Check for existing encryption key >> ..\scripts\windows-db-setup.bat
+  echo if not exist "%%KEY_PATH%%" ( >> ..\scripts\windows-db-setup.bat
+  echo   echo No encryption key found, creating placeholder for app to use >> ..\scripts\windows-db-setup.bat
+  echo   certutil -f -encodehex NUL "%%KEY_PATH%%" 32 ^>nul 2^>^&1 >> ..\scripts\windows-db-setup.bat
+  echo   if errorlevel 1 ( >> ..\scripts\windows-db-setup.bat
+  echo     echo Failed to create key file. Please run as administrator. >> ..\scripts\windows-db-setup.bat
+  echo     exit /b 1 >> ..\scripts\windows-db-setup.bat
+  echo   ) >> ..\scripts\windows-db-setup.bat
+  echo ) >> ..\scripts\windows-db-setup.bat
+  echo. >> ..\scripts\windows-db-setup.bat
+  echo echo Database setup complete. Your database will be stored at: %%DB_PATH%% >> ..\scripts\windows-db-setup.bat
+)
+
+REM Create run script in project root scripts
+if not exist "..\scripts\run-app.bat" (
+  echo @echo off > ..\scripts\run-app.bat
+  echo REM Run script for Secure Sign In application >> ..\scripts\run-app.bat
+  echo. >> ..\scripts\run-app.bat
+  echo REM Set correct database path >> ..\scripts\run-app.bat
+  echo set "SQLITE_DB_PATH=%%USERPROFILE%%\.securesignin\securesignin.db" >> ..\scripts\run-app.bat
+  echo. >> ..\scripts\run-app.bat
+  echo REM Run database setup script if it exists >> ..\scripts\run-app.bat
+  echo if exist ".\scripts\windows-db-setup.bat" ( >> ..\scripts\run-app.bat
+  echo   call ".\scripts\windows-db-setup.bat" >> ..\scripts\run-app.bat
+  echo ) >> ..\scripts\run-app.bat
+  echo. >> ..\scripts\run-app.bat
+  echo REM Run the application >> ..\scripts\run-app.bat
+  echo set "APP_PATH=Secure Sign In.exe" >> ..\scripts\run-app.bat
+  echo if exist "%%APP_PATH%%" ( >> ..\scripts\run-app.bat
+  echo   echo Starting Secure Sign In application... >> ..\scripts\run-app.bat
+  echo   start "" "%%APP_PATH%%" >> ..\scripts\run-app.bat
+  echo ) else ( >> ..\scripts\run-app.bat
+  echo   echo Error: Application not found at %%APP_PATH%% >> ..\scripts\run-app.bat
+  echo   echo Please ensure you're running this script from the application directory. >> ..\scripts\run-app.bat
+  echo   exit /b 1 >> ..\scripts\run-app.bat
+  echo ) >> ..\scripts\run-app.bat
+)
+
+REM Restore user data after building
+echo Restoring user data after build...
+node scripts\preserve-data.js restore
+
 echo Build process completed successfully!
+echo Please use run-app.bat to start the application with proper database configuration.
+echo Your data has been preserved through the build process.
+
 echo Press any key to exit...
 pause > nul 
