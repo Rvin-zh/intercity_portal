@@ -1,8 +1,9 @@
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const os = require('os');
 const fs = require('fs');
+const http = require('http');
 
 // Keep a global reference of the window object to avoid garbage collection
 let mainWindow;
@@ -37,7 +38,7 @@ function getBackendPath() {
 // Check if backend is running
 async function checkBackendReachable(url) {
   return new Promise((resolve) => {
-    const req = require('http').get(url, (res) => {
+    const req = http.get(url, (res) => {
       res.resume();
       resolve(res.statusCode === 200);
     }).on('error', () => {
@@ -50,8 +51,40 @@ async function checkBackendReachable(url) {
   });
 }
 
+// Force kill any process using port 8080
+async function killProcessOnPort(port) {
+  return new Promise((resolve) => {
+    console.log(`Attempting to kill any process using port ${port}...`);
+    
+    if (os.platform() === 'win32') {
+      // Windows command to find and kill process on port
+      exec(`for /f "tokens=5" %a in ('netstat -aon ^| find ":${port}" ^| find "LISTENING"') do taskkill /F /PID %a`, (error) => {
+        if (error) {
+          console.log(`No process found on port ${port} or failed to kill: ${error.message}`);
+        } else {
+          console.log(`Successfully killed process on port ${port}`);
+        }
+        resolve();
+      });
+    } else {
+      // Linux/macOS command
+      exec(`lsof -i :${port} -t | xargs -r kill -9`, (error) => {
+        if (error) {
+          console.log(`No process found on port ${port} or failed to kill: ${error.message}`);
+        } else {
+          console.log(`Successfully killed process on port ${port}`);
+        }
+        resolve();
+      });
+    }
+  });
+}
+
 // Start the backend server
 async function startBackend() {
+  // First, ensure no process is already using our port
+  await killProcessOnPort(BACKEND_PORT);
+  
   const backendPath = getBackendPath();
   const backendDirectory = path.dirname(backendPath);
   
@@ -144,10 +177,11 @@ async function startBackend() {
     }
   }
 
-  // Check if backend is already running (less likely now, but good practice)
+  // Double-check if backend is already running
   if (await checkBackendReachable(`http://localhost:${BACKEND_PORT}/health`)) {
-    console.log('Backend appears to be running already.');
-    return true; // Indicate success (already running)
+    console.log('Backend appears to be running already, but we just killed port processes. This should not happen.');
+    await killProcessOnPort(BACKEND_PORT); // Try again
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a moment
   }
 
   try {
@@ -158,7 +192,8 @@ async function startBackend() {
     
     backendProcess = spawn(backendPath, [], {
       cwd: backendDirectory,
-      detached: os.platform() !== 'win32',
+      // Do not detach the process - this was causing issues with process termination
+      detached: false,
       shell: os.platform() === 'win32',
       env: {
         ...process.env, // Inherit environment
@@ -168,6 +203,9 @@ async function startBackend() {
         KEY_FILE: keyFilePath // Direct path to the encryption key
       }
     });
+
+    // Track the process ID for clean termination
+    console.log(`Backend process started with PID: ${backendProcess.pid}`);
 
     backendProcess.stdout.on('data', (data) => {
       console.log(`Backend stdout: ${data.toString().trim()}`);
@@ -272,8 +310,58 @@ async function waitForBackend() {
   return false;
 }
 
+// Ensure backend is properly terminated
+function terminateBackend() {
+  return new Promise(async (resolve) => {
+    if (backendProcess) {
+      console.log(`Terminating backend process with PID: ${backendProcess.pid}`);
+      
+      // Try graceful termination first
+      if (os.platform() === 'win32') {
+        exec(`taskkill /pid ${backendProcess.pid} /T /F`, (error) => {
+          if (error) console.error(`Failed to kill Windows process: ${error.message}`);
+          backendProcess = null;
+          
+          // Force kill any remaining process on port 8080
+          killProcessOnPort(BACKEND_PORT).then(resolve);
+        });
+      } else {
+        try {
+          backendProcess.kill('SIGTERM');
+          console.log('SIGTERM sent to backend process');
+          
+          // Give it a moment to terminate
+          setTimeout(() => {
+            // If still running, force kill
+            if (backendProcess) {
+              try {
+                backendProcess.kill('SIGKILL');
+                console.log('SIGKILL sent to backend process');
+              } catch (e) {
+                console.error(`Error sending SIGKILL: ${e.message}`);
+              }
+            }
+            
+            // Force kill any remaining process on port 8080
+            killProcessOnPort(BACKEND_PORT).then(resolve);
+          }, 1000);
+        } catch (error) {
+          console.error(`Error terminating backend: ${error.message}`);
+          killProcessOnPort(BACKEND_PORT).then(resolve);
+        }
+      }
+    } else {
+      // No known process, but let's make sure the port is free
+      killProcessOnPort(BACKEND_PORT).then(resolve);
+    }
+  });
+}
+
 // Electron App Lifecycle
 app.whenReady().then(async () => {
+  // First, make sure no previous instance is running
+  await killProcessOnPort(BACKEND_PORT);
+  
   const backendStarted = await startBackend();
   if (!backendStarted) {
     if (!app.isQuitting) app.quit();
@@ -297,8 +385,19 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', () => {
-  app.isQuitting = true;
+app.on('before-quit', async (event) => {
+  if (!app.isTerminating) {
+    event.preventDefault();
+    app.isQuitting = true;
+    app.isTerminating = true;
+    
+    console.log('Application is quitting, cleaning up resources...');
+    await terminateBackend();
+    
+    // Continue with quit after cleanup
+    console.log('Cleanup complete, quitting application');
+    app.quit();
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -307,20 +406,14 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', () => {
-  console.log('App is quitting, cleaning up backend...');
-  if (backendProcess) {
-    console.log('Terminating backend process');
-    try {
-      if (os.platform() === 'win32') {
-        spawn('taskkill', ['/pid', backendProcess.pid, '/f', '/t']);
-      } else {
-        // Kill the process group to ensure child processes are terminated
-        process.kill(-backendProcess.pid, 'SIGTERM');
-      }
-    } catch (e) {
-      console.error('Failed to kill backend process:', e);
-    }
-    backendProcess = null;
+app.on('will-quit', async (event) => {
+  if (!app.isTerminating) {
+    event.preventDefault();
+    app.isTerminating = true;
+    
+    console.log('Final termination check before quit...');
+    await terminateBackend();
+    
+    app.quit();
   }
 }); 
