@@ -1,4 +1,12 @@
-// Database Preservation Tool
+#!/usr/bin/env node
+
+/**
+ * Database Preservation Tool for Secure Sign In
+ * 
+ * This script backs up the database before building and restores it afterward
+ * to ensure data is not lost during rebuilds.
+ */
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -57,13 +65,13 @@ function restoreDatabase() {
   try {
     fs.copyFileSync(TEMP_BACKUP_PATH, DB_PATH);
     console.log(`Successfully restored database to ${DB_PATH}`);
-
+    
     // Make a timestamp backup as well
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const timestampBackup = path.join(BACKUP_DIR, `backup-${timestamp}.db`);
     fs.copyFileSync(TEMP_BACKUP_PATH, timestampBackup);
     console.log(`Created timestamped backup at ${timestampBackup}`);
-
+    
     return true;
   } catch (error) {
     console.error(`Error restoring database: ${error.message}`);
