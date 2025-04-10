@@ -6,15 +6,16 @@ export SQLITE_DB_PATH="$HOME/.securesignin/securesignin.db"
 
 # Run database setup script if it exists
 if [ -f "./scripts/linux-db-setup.sh" ]; then
-  ./scripts/linux-db-setup.sh
+  bash "./scripts/linux-db-setup.sh"
 fi
 
 # Run the application
-if [ -f "./Secure Sign In-1.0.0.AppImage" ]; then
+APP_PATH="./Secure Sign In-1.0.0.AppImage"
+if [ -f "$APP_PATH" ]; then
   echo "Starting Secure Sign In application..."
-  ./Secure\ Sign\ In-1.0.0.AppImage
+  "$APP_PATH"
 else
-  echo "Error: Application not found."
+  echo "Error: Application not found at $APP_PATH"
   echo "Please ensure you're running this script from the application directory."
   exit 1
 fi

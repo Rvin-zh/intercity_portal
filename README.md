@@ -212,3 +212,106 @@ npm run dev
 ## License
 
 MIT License
+
+# SecureSignIn
+
+A secure authentication system with support for SQLite database.
+
+## Features
+
+- User registration and login
+- Password reset with security questions
+- Dashboard with user management
+- Secure password hashing with bcrypt
+- Login history tracking
+
+## SQLite Support
+
+This application now uses SQLite for data storage, which provides several benefits:
+
+- Self-contained database (single file)
+- Zero configuration required
+- Excellent for desktop applications (AppImage, Windows EXE)
+- Simplified deployment
+- No need for a separate database server
+
+## Running the Application
+
+### Using Docker Compose
+
+The easiest way to run the application is using Docker Compose:
+
+```bash
+# Start the application
+./run.sh
+
+# Stop the application
+./run.sh stop
+
+# View logs
+./run.sh logs
+```
+
+### Manual Setup
+
+If you prefer to run the application manually:
+
+1. Install Go 1.18 or later
+2. Install SQLite (if not already installed)
+3. Clone the repository
+4. Run `go mod download` to download dependencies
+5. Run `go build -o securesignin .` to build the application
+6. Run `./securesignin` to start the application
+
+## Migrating from PostgreSQL to SQLite
+
+If you were previously using PostgreSQL and want to migrate to SQLite, follow these steps:
+
+### Using the Migration Tool
+
+1. Ensure PostgreSQL is still running and accessible
+2. Run the migration tool:
+
+```bash
+# Build the migration tool
+go build -tags migration -o migrate_to_sqlite migrate_postgres_to_sqlite.go
+
+# Run the migration tool (it will connect to PostgreSQL and create a new SQLite database)
+./migrate_to_sqlite
+```
+
+3. The tool will create a new SQLite database file in the `data` directory
+4. Update your application configuration to use SQLite (this is the default now)
+5. Start the application using SQLite
+
+### Environment Variables
+
+The application now recognizes the following environment variables:
+
+- `SQLITE_DB_PATH`: Path to the SQLite database file (default: `data/securesignin.db`)
+
+## Database File Location
+
+The SQLite database file is stored in the following locations:
+
+- Docker: `/app/data/securesignin.db` (persisted using Docker volume)
+- Standalone: `./data/securesignin.db` (relative to the application directory)
+
+## AppImage and Windows EXE Packaging
+
+SQLite is ideally suited for AppImage and Windows EXE packages since the database is embedded in the application as a file:
+
+1. For AppImage, the SQLite database file can be stored in the user's home directory
+2. For Windows EXE, the SQLite database file can be stored in the application directory or user's Documents folder
+
+This eliminates the need for users to install and configure a separate database server.
+
+## Security Considerations
+
+- The SQLite database file contains sensitive information and should be properly secured
+- Ensure the database file has appropriate permissions (readable/writable only by the application)
+- Consider encrypting the database file for additional security
+
+## License
+
+[License information]

@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"SecureSignIn/db"
+	"SecureSignIn/utils"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -63,6 +68,20 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Set up a database backup on startup and daily backups
+	dbPath := os.Getenv("SQLITE_DB_PATH")
+	if dbPath == "" {
+		dbPath = "data/securesignin.db"
+	}
+
+	// Perform initial backup
+	if _, err := utils.BackupDatabase(dbPath); err != nil {
+		log.Printf("Warning: Initial database backup failed: %v", err)
+	}
+
+	// Schedule regular backups (every 24 hours)
+	utils.ScheduleBackups(dbPath, 24)
+
 	// Routes
 	e.GET("/", indexHandler)
 	e.GET("/dashboard", dashboardHandler)
@@ -85,10 +104,44 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Setup graceful shutdown
+	go func() {
+		// Create channel to listen for OS signals
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+		<-quit // Wait for signal
+
+		log.Println("Shutting down server...")
+
+		// Create backup before shutdown
+		if _, err := utils.BackupDatabase(dbPath); err != nil {
+			log.Printf("Warning: Shutdown database backup failed: %v", err)
+		}
+
+		// Close database connection
+		if db.DB != nil {
+			log.Println("Closing database connection...")
+			if err := db.DB.Close(); err != nil {
+				log.Printf("Error closing database: %v", err)
+			}
+		}
+
+		// Shutdown HTTP server
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := e.Shutdown(ctx); err != nil {
+			log.Fatalf("Server shutdown failed: %v", err)
+		}
+	}()
+
 	// Start server
 	log.Printf("Starting server on IPv4 http://0.0.0.0:8080")
 	log.Printf("Starting server on IPv6 http://[::]:8080")
-	if err := e.StartServer(server); err != nil {
+	if err := e.StartServer(server); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+
+	log.Println("Server stopped gracefully")
 }

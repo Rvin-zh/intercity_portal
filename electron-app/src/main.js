@@ -54,7 +54,15 @@ async function checkBackendReachable(url) {
 async function startBackend() {
   const backendPath = getBackendPath();
   const backendDirectory = path.dirname(backendPath);
-  const sqliteDbPath = path.join(app.getPath('userData'), 'securesignin.db');
+  
+  // Get user data paths
+  const appDataDir = app.getPath('userData');
+  const homeDir = app.getPath('home');
+  const secureSignInDir = path.join(homeDir, '.securesignin');
+  
+  // Set database path - prioritize environment variable, then user .securesignin dir
+  const sqliteDbPath = process.env.SQLITE_DB_PATH || path.join(secureSignInDir, 'securesignin.db');
+  
   const keyDirectory = path.join(backendDirectory, 'keys');
   const keyFilePath = path.join(keyDirectory, 'encryption.key');
 
@@ -64,14 +72,23 @@ async function startBackend() {
   console.log(`Key directory path: ${keyDirectory}`);
   console.log(`Encryption key path: ${keyFilePath}`);
 
-  // Ensure key directory exists
-  if (!fs.existsSync(keyDirectory)) {
-    console.log('Creating key directory...');
-    try {
-      fs.mkdirSync(keyDirectory, { recursive: true });
-      console.log('Key directory created successfully.');
-    } catch (error) {
-      console.error(`Error creating key directory: ${error.message}`);
+  // Ensure all required directories exist
+  const requiredDirs = [
+    appDataDir,
+    secureSignInDir,
+    path.dirname(sqliteDbPath),
+    keyDirectory
+  ];
+  
+  for (const dir of requiredDirs) {
+    if (!fs.existsSync(dir)) {
+      console.log(`Creating directory: ${dir}`);
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`Directory created successfully: ${dir}`);
+      } catch (error) {
+        console.error(`Error creating directory ${dir}: ${error.message}`);
+      }
     }
   }
 
@@ -79,10 +96,27 @@ async function startBackend() {
   if (!fs.existsSync(keyFilePath)) {
     const errorMsg = `Encryption key not found at: ${keyFilePath}`;
     console.error(errorMsg);
-    dialog.showErrorBox('Encryption Key Error', 
-      `${errorMsg}\n\nPlease ensure the encryption key file exists at 'keys/encryption.key' in the application resources.`);
-    app.quit();
-    return false; // Indicate failure
+    
+    // Check if we have a key in the user home directory that we can copy
+    const homeKeyPath = path.join(secureSignInDir, 'encryption.key');
+    if (fs.existsSync(homeKeyPath)) {
+      console.log(`Found encryption key at ${homeKeyPath}, copying to ${keyFilePath}`);
+      try {
+        fs.copyFileSync(homeKeyPath, keyFilePath);
+        console.log('Encryption key copied successfully.');
+      } catch (copyError) {
+        console.error(`Error copying key: ${copyError.message}`);
+        dialog.showErrorBox('Encryption Key Error', 
+          `${errorMsg}\n\nAttempted to copy from ${homeKeyPath} but failed: ${copyError.message}`);
+        app.quit();
+        return false;
+      }
+    } else {
+      dialog.showErrorBox('Encryption Key Error', 
+        `${errorMsg}\n\nPlease ensure the encryption key file exists at 'keys/encryption.key' in the application resources.`);
+      app.quit();
+      return false;
+    }
   }
 
   if (!fs.existsSync(backendPath)) {
@@ -129,7 +163,7 @@ async function startBackend() {
       env: {
         ...process.env, // Inherit environment
         USE_SQLITE: '1', // Tell backend to use SQLite
-        SQLITE_PATH: sqliteDbPath, // Provide path for the db file
+        SQLITE_DB_PATH: sqliteDbPath, // Provide path for the db file
         KEY_DIR: keyDirectory, // Specify key directory path
         KEY_FILE: keyFilePath // Direct path to the encryption key
       }

@@ -394,7 +394,15 @@ func basicRegisterHandler(c echo.Context) error {
 	// Check if user exists
 	row, err := db.GetUserByUsername(username)
 	if err != nil {
-		log.Printf("Error preparing username check: %v", err)
+		log.Printf("ERROR preparing username check: %v", err)
+		// Log detailed information about the error
+		log.Printf("ERROR TYPE: %T", err)
+		log.Printf("Username attempted: %s", username)
+		log.Printf("Database connection state: %v", db.DB != nil)
+		if db.DB != nil {
+			pingErr := db.DB.Ping()
+			log.Printf("Database ping result: %v", pingErr)
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking username.")
 	}
 

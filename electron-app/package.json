@@ -26,6 +26,11 @@
     ],
     "extraResources": [
       {
+        "from": "../scripts",
+        "to": "scripts",
+        "filter": ["**/*"]
+      },
+      {
         "from": "../main",
         "to": "backend/main"
       },

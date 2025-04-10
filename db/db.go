@@ -5,44 +5,60 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
+	"SecureSignIn/utils"
+
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
 var DB *sql.DB
 
-// InitializeDB sets up the PostgreSQL database connection using environment variables.
+// InitializeDB sets up the SQLite database connection.
 func InitializeDB() error {
 	var err error
 
-	// PostgreSQL connection logic using environment variables from docker-compose
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+	// Check for a custom database path from environment variable
+	dbPath := os.Getenv("SQLITE_DB_PATH")
+	log.Printf("SQLITE_DB_PATH environment variable: %q", dbPath)
 
-	if dbHost == "" || dbPort == "" || dbUser == "" || dbPassword == "" || dbName == "" {
-		log.Println("Warning: Missing one or more PostgreSQL environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME). Defaulting to standard values.")
-		dbHost = "db" // Default service name in docker-compose
-		dbPort = "5432"
-		dbUser = "postgres"
-		dbPassword = "postgres"
-		dbName = "transport_db" // Matching docker-compose
+	if dbPath == "" {
+		// Use default path in data directory
+		dataDir := "data"
+		// Ensure data directory exists
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			return fmt.Errorf("failed to create data directory: %w", err)
+		}
+		dbPath = filepath.Join(dataDir, "securesignin.db")
 	}
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbPassword, dbName)
+	// Make sure the directory exists
+	dbDir := filepath.Dir(dbPath)
+	log.Printf("Database directory: %s", dbDir)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		log.Printf("Error creating database directory: %v", err)
+		return fmt.Errorf("failed to create database directory: %w", err)
+	}
 
-	log.Printf("Connecting to PostgreSQL at %s:%s database=%s user=%s", dbHost, dbPort, dbName, dbUser)
-	DB, err = sql.Open("postgres", dsn)
+	log.Printf("Opening SQLite database at: %s", dbPath)
+	// SQLite connection string with WAL journal mode for better concurrency and performance
+	connStr := fmt.Sprintf("%s?_journal=WAL&_timeout=5000&_fk=true", dbPath)
+	DB, err = sql.Open("sqlite3", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open PostgreSQL database: %w", err)
+		return fmt.Errorf("failed to open SQLite database: %w", err)
 	}
 
-	DB.SetMaxOpenConns(25)
-	DB.SetMaxIdleConns(25)
+	// Check if we can actually write to the database
+	_, err = DB.Exec("PRAGMA temp_store = MEMORY")
+	if err != nil {
+		log.Printf("Database write test failed: %v", err)
+		return fmt.Errorf("database write test failed, check permissions: %w", err)
+	}
+
+	// SQLite doesn't need as many connections as PostgreSQL
+	DB.SetMaxOpenConns(10)
+	DB.SetMaxIdleConns(5)
 	DB.SetConnMaxLifetime(5 * time.Minute)
 
 	// Check connection
@@ -52,6 +68,61 @@ func InitializeDB() error {
 		return fmt.Errorf("failed to connect to database: %w", pingErr)
 	}
 
+	// Apply SQLite performance optimizations
+	pragmas := []string{
+		"PRAGMA synchronous = NORMAL", // Faster, still safe for most cases
+		"PRAGMA journal_mode = WAL",   // Enable Write-Ahead Logging
+		"PRAGMA foreign_keys = ON",    // Enforce foreign key constraints
+		"PRAGMA cache_size = 5000",    // Use more memory for caching (in pages)
+		"PRAGMA temp_store = MEMORY",  // Store temporary tables in memory
+	}
+
+	for _, pragma := range pragmas {
+		if _, err := DB.Exec(pragma); err != nil {
+			log.Printf("Warning: Failed to execute pragma '%s': %v", pragma, err)
+		} else {
+			log.Printf("Applied SQLite optimization: %s", pragma)
+		}
+	}
+
+	// Check if database file exists and has data
+	fileInfo, err := os.Stat(dbPath)
+	isNewDB := false
+	if err != nil {
+		if os.IsNotExist(err) {
+			isNewDB = true
+			log.Println("Database file does not exist, will be created")
+		} else {
+			log.Printf("Error checking database file: %v", err)
+		}
+	} else {
+		isNewDB = fileInfo.Size() == 0
+		if isNewDB {
+			log.Println("Database file exists but is empty")
+		}
+	}
+
+	// For existing databases, perform integrity check
+	if !isNewDB {
+		// Check database integrity
+		isValid, result, err := utils.CheckDatabaseIntegrity(dbPath)
+		if err != nil {
+			log.Printf("Warning: Database integrity check failed: %v", err)
+		} else if !isValid {
+			log.Printf("Warning: Database integrity check returned: %s", result)
+			log.Println("Attempting automatic database repair...")
+
+			if err := utils.RepairDatabaseIfNeeded(dbPath); err != nil {
+				log.Printf("Database repair failed: %v", err)
+				log.Println("Continuing with potentially corrupted database - data loss may occur")
+			} else {
+				log.Println("Database repair completed successfully")
+			}
+		} else {
+			log.Println("Database integrity check passed")
+		}
+	}
+
 	log.Println("Database connection successful. Initializing schema...")
 	err = initializeSchema()
 	if err != nil {
@@ -59,19 +130,27 @@ func InitializeDB() error {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 
+	// Verify that all expected tables and indexes exist
+	if err := utils.VerifyTableConsistency(DB); err != nil {
+		log.Printf("Warning: Table consistency check failed: %v", err)
+		// We continue anyway as the schema initialization should have created any missing tables
+	}
+
 	log.Println("Database initialized successfully")
 	return nil
 }
 
-// initializeSchema creates the necessary tables and adds missing columns (PostgreSQL syntax).
+// initializeSchema creates the necessary tables (SQLite syntax).
 func initializeSchema() error {
-	// Create users table with all essential columns, including NOT NULL
+	// Create users table with all essential columns
 	usersTableSQL := `
 	CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		username VARCHAR(255) UNIQUE NOT NULL,
-		password TEXT NOT NULL, -- Included directly
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT UNIQUE NOT NULL,
+		password TEXT NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		date_of_birth TEXT,
+		social_security TEXT
 	);
 	`
 	_, err := DB.Exec(usersTableSQL)
@@ -79,27 +158,14 @@ func initializeSchema() error {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
 
-	// Add optional/later columns individually using IF NOT EXISTS (PostgreSQL 9.6+)
-	addColumnSQLs := []string{
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE`,   // Nullable for now
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS social_security TEXT`, // Nullable for now
-	}
-
-	for _, sql := range addColumnSQLs {
-		_, err = DB.Exec(sql)
-		if err != nil {
-			log.Printf("Warning: Failed to execute ALTER TABLE statement [%s]: %v", sql, err)
-		}
-	}
-
 	// Create login_history table if it doesn't exist
 	loginHistoryTableSQL := `
 	CREATE TABLE IF NOT EXISTS login_history (
-		id SERIAL PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
-		login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		ip_address VARCHAR(50),
-		success BOOLEAN,
+		login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		ip_address TEXT,
+		success INTEGER,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	`
@@ -118,36 +184,39 @@ func initializeSchema() error {
 	return nil
 }
 
-// AddUser inserts a new user into the database (PostgreSQL).
+// AddUser inserts a new user into the database (SQLite).
 func AddUser(username, passwordHash, dob, ssn string) (int64, error) {
-	var userID int64
-	query := "INSERT INTO users (username, password, date_of_birth, social_security) VALUES ($1, $2, $3, $4) RETURNING id"
-	err := DB.QueryRow(query, username, passwordHash, dob, ssn).Scan(&userID)
+	query := "INSERT INTO users (username, password, date_of_birth, social_security) VALUES (?, ?, ?, ?)"
+	result, err := DB.Exec(query, username, passwordHash, dob, ssn)
 	if err != nil {
-		return 0, fmt.Errorf("error inserting user and getting ID (postgres): %w", err)
+		return 0, fmt.Errorf("error inserting user (sqlite): %w", err)
 	}
+
+	userID, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("error getting last insert ID: %w", err)
+	}
+
 	return userID, nil
 }
 
-// GetUserByUsername retrieves a user by their username (PostgreSQL).
+// GetUserByUsername retrieves a user by their username (SQLite).
 func GetUserByUsername(username string) (*sql.Row, error) {
-	query := "SELECT id, username, date_of_birth, social_security, password FROM users WHERE username = $1"
+	query := "SELECT id, username, date_of_birth, social_security, password FROM users WHERE username = ?"
 	row := DB.QueryRow(query, username)
 	return row, nil // Error checking deferred to Scan
 }
 
-// GetUserByID retrieves a user by their ID (PostgreSQL).
-// Note: This func still returns only id, username, password. Update if dob/ssn needed.
+// GetUserByID retrieves a user by their ID (SQLite).
 func GetUserByID(userID int) (*sql.Row, error) {
-	query := "SELECT id, username, password FROM users WHERE id = $1"
+	query := "SELECT id, username, password FROM users WHERE id = ?"
 	row := DB.QueryRow(query, userID)
 	return row, nil // Error checking deferred to Scan
 }
 
-// UpdateUserPassword updates a user's password hash (PostgreSQL).
-// Note: userID param is int, but DB might store as int64. Ensure type consistency.
+// UpdateUserPassword updates a user's password hash (SQLite).
 func UpdateUserPassword(userID int, newPasswordHash string) error {
-	query := "UPDATE users SET password = $1 WHERE id = $2"
+	query := "UPDATE users SET password = ? WHERE id = ?"
 	_, err := DB.Exec(query, newPasswordHash, userID)
 	if err != nil {
 		return fmt.Errorf("error updating password for user ID %d: %w", userID, err)
@@ -155,17 +224,23 @@ func UpdateUserPassword(userID int, newPasswordHash string) error {
 	return nil
 }
 
-// LogLoginAttempt records a login attempt (PostgreSQL).
+// LogLoginAttempt records a login attempt (SQLite).
 func LogLoginAttempt(userID int64, ipAddress string, success bool) error {
-	query := "INSERT INTO login_history (user_id, ip_address, success) VALUES ($1, $2, $3)"
-	_, err := DB.Exec(query, userID, ipAddress, success)
+	// Convert bool to integer for SQLite
+	successInt := 0
+	if success {
+		successInt = 1
+	}
+
+	query := "INSERT INTO login_history (user_id, ip_address, success) VALUES (?, ?, ?)"
+	_, err := DB.Exec(query, userID, ipAddress, successInt)
 	if err != nil {
 		return fmt.Errorf("error logging login attempt for user ID %d: %w", userID, err)
 	}
 	return nil
 }
 
-// GetAllUsers retrieves all users (PostgreSQL).
+// GetAllUsers retrieves all users (SQLite).
 func GetAllUsers() (*sql.Rows, error) {
 	rows, err := DB.Query("SELECT id, username, created_at FROM users ORDER BY username")
 	if err != nil {
@@ -174,7 +249,7 @@ func GetAllUsers() (*sql.Rows, error) {
 	return rows, nil
 }
 
-// GetLoginHistory retrieves all login history records (PostgreSQL).
+// GetLoginHistory retrieves all login history records (SQLite).
 func GetLoginHistory() (*sql.Rows, error) {
 	query := `
 	SELECT lh.id, u.username, lh.login_time, lh.ip_address, lh.success
