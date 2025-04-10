@@ -11,9 +11,31 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Define paths
+// Define paths - check multiple possible locations
 const HOME_DIR = os.homedir();
-const DB_PATH = path.join(HOME_DIR, '.securesignin', 'securesignin.db');
+const POSSIBLE_DB_PATHS = [
+  path.join(HOME_DIR, '.securesignin', 'securesignin.db'),                   // Electron app path
+  path.join(process.cwd(), 'data', 'securesignin.db'),                       // Local development path
+  process.env.SQLITE_DB_PATH || '',                                          // Environment variable path
+  path.join('/app/data', 'securesignin.db')                                  // Docker container path
+];
+
+// Find the first existing database or use the default path
+function findDatabasePath() {
+  // First check if any of the databases exist
+  for (const dbPath of POSSIBLE_DB_PATHS) {
+    if (dbPath && fs.existsSync(dbPath)) {
+      console.log(`Found existing database at: ${dbPath}`);
+      return dbPath;
+    }
+  }
+  
+  // If no database exists, use the default Electron app path
+  console.log(`No existing database found, will use default path: ${POSSIBLE_DB_PATHS[0]}`);
+  return POSSIBLE_DB_PATHS[0];
+}
+
+const DB_PATH = findDatabasePath();
 const BACKUP_DIR = path.join(HOME_DIR, '.config', 'secure-sign-in-app', 'backups');
 const TEMP_BACKUP_PATH = path.join(BACKUP_DIR, 'pre-build-backup.db');
 
@@ -40,7 +62,7 @@ function backupDatabase() {
 
   try {
     fs.copyFileSync(DB_PATH, TEMP_BACKUP_PATH);
-    console.log(`Successfully backed up database to ${TEMP_BACKUP_PATH}`);
+    console.log(`Successfully backed up database from ${DB_PATH} to ${TEMP_BACKUP_PATH}`);
     return true;
   } catch (error) {
     console.error(`Error backing up database: ${error.message}`);
@@ -64,13 +86,29 @@ function restoreDatabase() {
 
   try {
     fs.copyFileSync(TEMP_BACKUP_PATH, DB_PATH);
-    console.log(`Successfully restored database to ${DB_PATH}`);
+    console.log(`Successfully restored database from ${TEMP_BACKUP_PATH} to ${DB_PATH}`);
     
     // Make a timestamp backup as well
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const timestampBackup = path.join(BACKUP_DIR, `backup-${timestamp}.db`);
     fs.copyFileSync(TEMP_BACKUP_PATH, timestampBackup);
     console.log(`Created timestamped backup at ${timestampBackup}`);
+    
+    // Also try to restore to other potential locations if they exist
+    for (const otherPath of POSSIBLE_DB_PATHS) {
+      if (otherPath !== DB_PATH && otherPath) {
+        const otherDir = path.dirname(otherPath);
+        if (fs.existsSync(otherDir)) {
+          try {
+            fs.mkdirSync(otherDir, { recursive: true });
+            fs.copyFileSync(TEMP_BACKUP_PATH, otherPath);
+            console.log(`Also restored database to alternative location: ${otherPath}`);
+          } catch (err) {
+            console.log(`Note: Could not restore to alternative location ${otherPath}: ${err.message}`);
+          }
+        }
+      }
+    }
     
     return true;
   } catch (error) {
@@ -83,9 +121,11 @@ function restoreDatabase() {
 function main() {
   if (operation === 'backup') {
     console.log('=== Backing up database before build ===');
+    console.log(`Using database path: ${DB_PATH}`);
     backupDatabase();
   } else if (operation === 'restore') {
     console.log('=== Restoring database after build ===');
+    console.log(`Using database path: ${DB_PATH}`);
     restoreDatabase();
   } else {
     console.error(`Unknown operation: ${operation}`);
