@@ -1,12 +1,12 @@
 # Stage 1: Build the Go application
-FROM golang:1.23 AS builder
+FROM golang:1.21-alpine AS builder
 WORKDIR /app
 
 # CGO needs to be enabled for SQLite
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential sqlite3 && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache gcc musl-dev sqlite-dev 
 
 # Set environment variables for Go
-ENV GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=https://proxy.golang.org,direct
 ENV GO111MODULE=on
 # Enable CGO for SQLite
 ENV CGO_ENABLED=1
@@ -23,17 +23,12 @@ COPY . .
 RUN go build -v -o main . \
     && ls -l /app/main # Keep check to verify binary exists
 
-# Stage 2: Create the final image using Ubuntu
-FROM ubuntu:22.04
+# Stage 2: Create the final image using Alpine
+FROM alpine:3.18
 WORKDIR /app
 
 # Install SQLite and other necessary packages
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    sqlite3 \
-    ca-certificates \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache sqlite ca-certificates curl tzdata
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chmod 755 /app/data

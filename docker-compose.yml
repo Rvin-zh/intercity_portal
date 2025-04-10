@@ -5,6 +5,7 @@ services:
       - "8080:8080"
     environment:
       - SQLITE_DB_PATH=/app/data/securesignin.db
+      - GOPROXY=https://proxy.golang.org,direct
     volumes:
       - encryption_keys:/app/keys
       - sqlite_data:/app/data
@@ -13,8 +14,8 @@ services:
         aliases:
           - app-service
     dns:
+      - 1.1.1.1
       - 8.8.8.8
-      - 8.8.4.4
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost:8080/health"]
       interval: 10s
