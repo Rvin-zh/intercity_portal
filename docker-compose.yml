@@ -1,6 +1,6 @@
 services:
   app:
-    image: arvinzaheri/securesignin:latest
+    image: securesignin-app:local
     user: root
     build:
       context: .

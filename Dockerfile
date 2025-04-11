@@ -3,7 +3,7 @@ FROM alpine:latest AS builder
 WORKDIR /app
 
 # Install Go and build dependencies
-RUN apk add --no-cache go gcc musl-dev sqlite-dev
+RUN apk add  go gcc musl-dev sqlite-dev
 
 # Set environment variables for Go
 ENV GO111MODULE=on
