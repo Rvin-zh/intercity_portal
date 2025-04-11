@@ -257,11 +257,15 @@ func rowsToMap(rows *sql.Rows) ([]map[string]interface{}, error) {
 
 // Dashboard handler - For logged in users (Simplified, assumes auth middleware sets user)
 func dashboardHandler(c echo.Context) error {
-	// Make sure user is logged in first
-	username := getLoggedInUsername(c)
-	if username == "" {
+	// Make sure user is logged in first by checking for username cookie
+	cookie, err := c.Cookie("username")
+	if err != nil || cookie.Value == "" {
+		log.Printf("Dashboard access attempted without valid session")
 		return c.Redirect(http.StatusSeeOther, "/login?error=You must be logged in to access this page")
 	}
+
+	username := cookie.Value
+	log.Printf("Dashboard accessed by user: %s", username)
 
 	// Fetch all users
 	allUsers, err := db.GetAllUsers()
@@ -328,11 +332,20 @@ func dashboardHandler(c echo.Context) error {
 
 // Login handler - Render login page
 func loginHandler(c echo.Context) error {
+	// Get error parameter
+	errorMsg := c.QueryParam("error")
+
+	// If error is about needing to be logged in, and we're already on the login page,
+	// don't show this confusing error
+	if errorMsg == "You must be logged in to access this page" {
+		errorMsg = ""
+	}
+
 	data := PageData{
 		Title:      "Login",
 		ActivePage: "login",
 		Success:    c.QueryParam("success"),
-		Error:      c.QueryParam("error"),
+		Error:      errorMsg,
 	}
 	return renderTemplate(c, "login.html", data)
 }
@@ -428,6 +441,14 @@ func basicAuthHandler(c echo.Context) error {
 		log.Printf("Warning: Failed to log successful login attempt for user ID %d: %v", userID, err)
 		// Continue with login even if logging fails
 	}
+
+	// Set cookie to maintain session
+	cookie := new(http.Cookie)
+	cookie.Name = "username"
+	cookie.Value = storedUsername
+	cookie.Expires = time.Now().Add(24 * time.Hour) // Cookie expires in 24 hours
+	cookie.Path = "/"
+	c.SetCookie(cookie)
 
 	return c.Redirect(http.StatusSeeOther, "/dashboard?success=Successfully logged in&user="+storedUsername)
 }
@@ -693,6 +714,15 @@ func healthCheckHandler(c echo.Context) error {
 // Logout handler (simple redirect for demo)
 func logoutHandler(c echo.Context) error {
 	log.Printf("User logged out.")
+
+	// Clear the username cookie to end the session
+	cookie := new(http.Cookie)
+	cookie.Name = "username"
+	cookie.Value = ""
+	cookie.Expires = time.Now().Add(-1 * time.Hour) // Set expiration in the past to delete the cookie
+	cookie.Path = "/"
+	c.SetCookie(cookie)
+
 	return c.Redirect(http.StatusSeeOther, "/login?success=Successfully logged out.")
 }
 
@@ -1145,22 +1175,22 @@ func securityQuestionResetHandler(c echo.Context) error {
 
 // --- Security Question Management Handler ---
 func setupSecurityQuestionHandler(c echo.Context) error {
-	// Check if user is logged in
-	userID := getUserIDFromSession(c)
-	if userID == 0 {
+	// Check if user is logged in using cookie
+	cookie, err := c.Cookie("username")
+	if err != nil || cookie.Value == "" {
 		return c.Redirect(http.StatusSeeOther, "/login?error=You must be logged in to set up security questions")
 	}
 
-	// Get user information
-	userRow, err := db.GetUserByID(int(userID))
+	// Get user information using the username from cookie
+	userRow, err := db.GetUserByUsername(cookie.Value)
 	if err != nil {
-		log.Printf("Error getting user by ID: %v", err)
+		log.Printf("Error getting user by username: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving user information")
 	}
 
-	var storedUserID int64
-	var username, password string
-	err = userRow.Scan(&storedUserID, &username, &password)
+	var userID int64
+	var username, dob, ssn, password, email string
+	err = userRow.Scan(&userID, &username, &dob, &ssn, &password, &email)
 	if err != nil {
 		log.Printf("Error scanning user data: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving user information")
@@ -1199,7 +1229,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				Username:         username,
 				HasSecurityQ:     hasSecurityQ,
 				SecurityQuestion: questionText,
-				QuestionID:       storedUserID,
+				QuestionID:       userID,
 			})
 		}
 
@@ -1215,7 +1245,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				Username:         username,
 				HasSecurityQ:     hasSecurityQ,
 				SecurityQuestion: questionText,
-				QuestionID:       storedUserID,
+				QuestionID:       userID,
 			})
 		}
 
@@ -1242,7 +1272,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 					Username:         username,
 					HasSecurityQ:     hasSecurityQ,
 					SecurityQuestion: questionText,
-					QuestionID:       storedUserID,
+					QuestionID:       userID,
 				})
 			}
 
@@ -1254,7 +1284,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				Username:         username,
 				HasSecurityQ:     true,
 				SecurityQuestion: securityQuestion,
-				QuestionID:       storedUserID,
+				QuestionID:       userID,
 			})
 		} else {
 			// Add new question
@@ -1279,7 +1309,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				Username:         username,
 				HasSecurityQ:     true,
 				SecurityQuestion: securityQuestion,
-				QuestionID:       storedUserID,
+				QuestionID:       userID,
 			})
 		}
 	}
@@ -1292,28 +1322,8 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 		Username:         username,
 		HasSecurityQ:     hasSecurityQ,
 		SecurityQuestion: questionText,
-		QuestionID:       storedUserID,
+		QuestionID:       userID,
 	})
-}
-
-// Helper function to get user ID from session (placeholder implementation)
-func getUserIDFromSession(c echo.Context) int64 {
-	// In a real application, this would extract the user ID from the session
-	// For now, we'll check if the username exists in the cookie
-	cookie, err := c.Cookie("username")
-	if err == nil && cookie.Value != "" {
-		// Look up the user ID from the username
-		userRow, err := db.GetUserByUsername(cookie.Value)
-		if err == nil {
-			var userID int64
-			var username, password string
-			err = userRow.Scan(&userID, &username, &password)
-			if err == nil {
-				return userID
-			}
-		}
-	}
-	return 0 // No user ID found
 }
 
 // Helper function to get logged in username
