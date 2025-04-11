@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Script to run the SecureSignIn application using Docker Compose
+# 
+# WINDOWS USERS: This script must be run in WSL (Windows Subsystem for Linux).
+# To run this script on Windows:
+# 1. Install WSL (https://docs.microsoft.com/en-us/windows/wsl/install)
+# 2. Open a WSL terminal
+# 3. Navigate to your project directory: cd /mnt/c/path/to/project
+# 4. Run this script: ./run.sh
+
 # Function to check if Docker is installed
 check_docker() {
     if ! command -v docker &> /dev/null; then

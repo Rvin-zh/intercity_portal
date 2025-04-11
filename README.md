@@ -41,6 +41,7 @@ A management application for an intercity terminal, built with Go and featuring 
 - Go 1.16 or higher
 - Node.js and npm (for Electron app)
 - Docker (optional)
+- Windows users: WSL (Windows Subsystem for Linux) for Docker and shell scripts
 
 ### Installation
 
@@ -63,6 +64,34 @@ go mod download
 cd electron-app
 npm install
 ```
+
+## Running on Windows
+
+Windows users should use WSL (Windows Subsystem for Linux) to run the shell scripts and Docker:
+
+1. Install WSL following [Microsoft's official instructions](https://docs.microsoft.com/en-us/windows/wsl/install)
+
+2. In WSL, navigate to your project directory:
+
+   ```bash
+   cd /mnt/c/path/to/project
+   ```
+
+3. Run the application using the `run.sh` script:
+
+   ```bash
+   ./run.sh
+   ```
+
+4. For database setup and configuration:
+   ```bash
+   ./setup-shared-db.sh
+   ```
+
+Alternatively, Windows users can use the Electron desktop version which provides native Windows support:
+
+1. Navigate to the electron-app directory
+2. Follow the instructions in the [Electron App README](./electron-app/README.md)
 
 ### Running the Application
 
@@ -89,6 +118,8 @@ From the project root:
 ```bash
 docker-compose up --build
 ```
+
+**Note for Windows users:** Docker commands should be run inside WSL for best results. Docker Desktop for Windows with WSL integration provides seamless Docker support.
 
 ## Development
 
@@ -259,6 +290,8 @@ The easiest way to run the application is using Docker Compose:
 # View logs
 ./run.sh logs
 ```
+
+**Note for Windows users:** Use Windows Subsystem for Linux (WSL) to run these shell scripts. See the [Running on Windows](#running-on-windows) section for details.
 
 ### Manual Setup
 
