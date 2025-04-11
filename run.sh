@@ -2,6 +2,10 @@
 
 # Script to run the SecureSignIn application using Docker Compose
 # 
+# The application uses the Docker Hub image: arvinzaheri/securesignin:latest
+# You can pull this image directly without building locally:
+#   docker pull arvinzaheri/securesignin:latest
+#
 # WINDOWS USERS: This script must be run in WSL (Windows Subsystem for Linux).
 # To run this script on Windows:
 # 1. Install WSL (https://docs.microsoft.com/en-us/windows/wsl/install)
