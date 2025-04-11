@@ -257,36 +257,73 @@ func rowsToMap(rows *sql.Rows) ([]map[string]interface{}, error) {
 
 // Dashboard handler - For logged in users (Simplified, assumes auth middleware sets user)
 func dashboardHandler(c echo.Context) error {
-	userRows, err := db.GetAllUsers()
-	if err != nil {
-		log.Printf("Error getting users: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to retrieve user data.")
-	}
-	usersData, err := rowsToMap(userRows)
-	if err != nil {
-		log.Printf("Error mapping users: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to process user data.")
+	// Make sure user is logged in first
+	username := getLoggedInUsername(c)
+	if username == "" {
+		return c.Redirect(http.StatusSeeOther, "/login?error=You must be logged in to access this page")
 	}
 
-	logRows, err := db.GetLoginHistory()
+	// Fetch all users
+	allUsers, err := db.GetAllUsers()
+	if err != nil {
+		log.Printf("Error getting all users: %v", err)
+		return renderTemplate(c, "dashboard.html", PageData{
+			Title:      "Dashboard",
+			Error:      "Error retrieving user data",
+			ActivePage: "dashboard",
+			IsLoggedIn: true,
+			Username:   username,
+		})
+	}
+	userMaps, err := rowsToMap(allUsers)
+	if err != nil {
+		log.Printf("Error converting user rows to map: %v", err)
+	}
+
+	// Fetch login history
+	loginHistory, err := db.GetLoginHistory()
 	if err != nil {
 		log.Printf("Error getting login history: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to retrieve login history.")
+		return renderTemplate(c, "dashboard.html", PageData{
+			Title:      "Dashboard",
+			Error:      "Error retrieving login history",
+			ActivePage: "dashboard",
+			IsLoggedIn: true,
+			Username:   username,
+		})
 	}
-	loginData, err := rowsToMap(logRows)
+	historyMaps, err := rowsToMap(loginHistory)
 	if err != nil {
-		log.Printf("Error mapping login history: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to process login history.")
+		log.Printf("Error converting login history rows to map: %v", err)
 	}
 
-	data := PageData{
-		Title:      "Dashboard",
-		ActivePage: "dashboard",
-		IsLoggedIn: true,
-		Users:      usersData,
-		LoginLogs:  loginData,
+	// Get the user ID for security question check
+	var userID int64
+	for _, user := range userMaps {
+		if user["username"] == username {
+			userID, _ = user["id"].(int64)
+			break
+		}
 	}
-	return renderTemplate(c, "dashboard.html", data)
+
+	// Check if user has security question
+	hasSecurityQ := false
+	if userID > 0 {
+		hasSecurityQ, err = db.HasSecurityQuestion(userID)
+		if err != nil {
+			log.Printf("Error checking security question: %v", err)
+		}
+	}
+
+	return renderTemplate(c, "dashboard.html", PageData{
+		Title:        "Dashboard",
+		ActivePage:   "dashboard",
+		Users:        userMaps,
+		LoginLogs:    historyMaps,
+		IsLoggedIn:   true,
+		Username:     username,
+		HasSecurityQ: hasSecurityQ,
+	})
 }
 
 // Login handler - Render login page
@@ -1104,6 +1141,188 @@ func securityQuestionResetHandler(c echo.Context) error {
 		Title:      "Reset Password with Security Question",
 		ActivePage: "forgot",
 	})
+}
+
+// --- Security Question Management Handler ---
+func setupSecurityQuestionHandler(c echo.Context) error {
+	// Check if user is logged in
+	userID := getUserIDFromSession(c)
+	if userID == 0 {
+		return c.Redirect(http.StatusSeeOther, "/login?error=You must be logged in to set up security questions")
+	}
+
+	// Get user information
+	userRow, err := db.GetUserByID(int(userID))
+	if err != nil {
+		log.Printf("Error getting user by ID: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving user information")
+	}
+
+	var storedUserID int64
+	var username, password string
+	err = userRow.Scan(&storedUserID, &username, &password)
+	if err != nil {
+		log.Printf("Error scanning user data: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving user information")
+	}
+
+	// Check if the user already has a security question
+	hasSecurityQ, err := db.HasSecurityQuestion(userID)
+	if err != nil {
+		log.Printf("Error checking for security question: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking security question status")
+	}
+
+	var questionText, questionID string
+	if hasSecurityQ {
+		// Get the existing question
+		qID, question, _, err := db.GetSecurityQuestionByUserID(userID)
+		if err != nil {
+			log.Printf("Error getting security question: %v", err)
+		} else {
+			questionText = question
+			questionID = fmt.Sprintf("%d", qID)
+		}
+	}
+
+	// Handle POST request (user submitting a new/updated security question)
+	if c.Request().Method == "POST" {
+		securityQuestion := strings.TrimSpace(c.FormValue("security_question"))
+		securityAnswer := strings.TrimSpace(c.FormValue("security_answer"))
+
+		if securityQuestion == "" || securityAnswer == "" {
+			return renderTemplate(c, "setup_security.html", PageData{
+				Title:            "Security Question",
+				Error:            "Both security question and answer are required",
+				ActivePage:       "setup_security",
+				UserID:           userID,
+				Username:         username,
+				HasSecurityQ:     hasSecurityQ,
+				SecurityQuestion: questionText,
+				QuestionID:       storedUserID,
+			})
+		}
+
+		// Hash the security answer
+		hashedSecurityAnswer, err := bcrypt.GenerateFromPassword([]byte(strings.ToLower(securityAnswer)), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("Error hashing security answer: %v", err)
+			return renderTemplate(c, "setup_security.html", PageData{
+				Title:            "Security Question",
+				Error:            "Error processing security answer",
+				ActivePage:       "setup_security",
+				UserID:           userID,
+				Username:         username,
+				HasSecurityQ:     hasSecurityQ,
+				SecurityQuestion: questionText,
+				QuestionID:       storedUserID,
+			})
+		}
+
+		// Save or update the security question
+		if hasSecurityQ {
+			// Update existing question
+			existingQID, err := strconv.ParseInt(questionID, 10, 64)
+			if err != nil {
+				existingQID, _, _, err = db.GetSecurityQuestionByUserID(userID)
+				if err != nil {
+					log.Printf("Error getting security question ID: %v", err)
+					return echo.NewHTTPError(http.StatusInternalServerError, "Error updating security question")
+				}
+			}
+
+			err = db.UpdateSecurityQuestion(existingQID, securityQuestion, string(hashedSecurityAnswer))
+			if err != nil {
+				log.Printf("Error updating security question: %v", err)
+				return renderTemplate(c, "setup_security.html", PageData{
+					Title:            "Security Question",
+					Error:            "Error updating security question",
+					ActivePage:       "setup_security",
+					UserID:           userID,
+					Username:         username,
+					HasSecurityQ:     hasSecurityQ,
+					SecurityQuestion: questionText,
+					QuestionID:       storedUserID,
+				})
+			}
+
+			return renderTemplate(c, "setup_security.html", PageData{
+				Title:            "Security Question",
+				Success:          "Security question updated successfully",
+				ActivePage:       "setup_security",
+				UserID:           userID,
+				Username:         username,
+				HasSecurityQ:     true,
+				SecurityQuestion: securityQuestion,
+				QuestionID:       storedUserID,
+			})
+		} else {
+			// Add new question
+			err = db.AddSecurityQuestion(userID, securityQuestion, string(hashedSecurityAnswer))
+			if err != nil {
+				log.Printf("Error adding security question: %v", err)
+				return renderTemplate(c, "setup_security.html", PageData{
+					Title:        "Security Question",
+					Error:        "Error saving security question",
+					ActivePage:   "setup_security",
+					UserID:       userID,
+					Username:     username,
+					HasSecurityQ: false,
+				})
+			}
+
+			return renderTemplate(c, "setup_security.html", PageData{
+				Title:            "Security Question",
+				Success:          "Security question saved successfully",
+				ActivePage:       "setup_security",
+				UserID:           userID,
+				Username:         username,
+				HasSecurityQ:     true,
+				SecurityQuestion: securityQuestion,
+				QuestionID:       storedUserID,
+			})
+		}
+	}
+
+	// Handle GET request (displaying the form)
+	return renderTemplate(c, "setup_security.html", PageData{
+		Title:            "Security Question",
+		ActivePage:       "setup_security",
+		UserID:           userID,
+		Username:         username,
+		HasSecurityQ:     hasSecurityQ,
+		SecurityQuestion: questionText,
+		QuestionID:       storedUserID,
+	})
+}
+
+// Helper function to get user ID from session (placeholder implementation)
+func getUserIDFromSession(c echo.Context) int64 {
+	// In a real application, this would extract the user ID from the session
+	// For now, we'll check if the username exists in the cookie
+	cookie, err := c.Cookie("username")
+	if err == nil && cookie.Value != "" {
+		// Look up the user ID from the username
+		userRow, err := db.GetUserByUsername(cookie.Value)
+		if err == nil {
+			var userID int64
+			var username, password string
+			err = userRow.Scan(&userID, &username, &password)
+			if err == nil {
+				return userID
+			}
+		}
+	}
+	return 0 // No user ID found
+}
+
+// Helper function to get logged in username
+func getLoggedInUsername(c echo.Context) string {
+	cookie, err := c.Cookie("username")
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	return cookie.Value
 }
 
 // --- End Handlers ---
