@@ -11,7 +11,7 @@ services:
       - SQLITE_DB_PATH=/app/data/securesignin.db
     volumes:
       - encryption_keys:/app/keys
-      - sqlite_data:/app/data
+      - ~/.SecureSignIn/data:/app/data
       - ./templates:/app/templates
       - ./static:/app/static
     networks:
@@ -30,7 +30,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  sqlite_data:
   encryption_keys:
 
 networks:

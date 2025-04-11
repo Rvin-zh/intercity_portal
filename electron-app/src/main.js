@@ -93,8 +93,17 @@ async function startBackend() {
   const homeDir = app.getPath('home');
   const secureSignInDir = path.join(homeDir, '.securesignin');
   
-  // Set database path - prioritize environment variable, then user .securesignin dir
-  const sqliteDbPath = process.env.SQLITE_DB_PATH || path.join(secureSignInDir, 'securesignin.db');
+  // Create a shared directory for Docker and Electron to access the same database
+  // This is the primary change to sync the database between Docker and Electron
+  const sharedDataDir = path.join(homeDir, 'SecureSignIn', 'data');
+  
+  // Set database path priority:
+  // 1. Environment variable
+  // 2. Shared directory with Docker
+  // 3. User's home directory (.securesignin)
+  const sqliteDbPath = process.env.SQLITE_DB_PATH || 
+                       path.join(sharedDataDir, 'securesignin.db') || 
+                       path.join(secureSignInDir, 'securesignin.db');
   
   const keyDirectory = path.join(backendDirectory, 'keys');
   const keyFilePath = path.join(keyDirectory, 'encryption.key');
@@ -109,6 +118,7 @@ async function startBackend() {
   const requiredDirs = [
     appDataDir,
     secureSignInDir,
+    sharedDataDir, // Make sure shared directory exists
     path.dirname(sqliteDbPath),
     keyDirectory
   ];
@@ -270,7 +280,8 @@ function createWindow() {
     // icon: path.join(__dirname, '..\/assets\/icon.png') // Adjust if you add an icon
   });
 
-  mainWindow.loadURL(`http://localhost:${BACKEND_PORT}/login`);
+  // Load the home page instead of directly going to login
+  mainWindow.loadURL(`http://localhost:${BACKEND_PORT}/`);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) {

@@ -15,6 +15,13 @@ A management application for an intercity terminal, built with Go and featuring 
 - Automatic data preservation during updates (New)
 - Terminal Management Features (Planned)
 
+## Recent Updates
+
+- **Authentication Improvements**: Implemented proper session management with cookies to fix login persistence and prevent "You must be logged in" errors.
+- **Security Question Management**: Fixed issues with security question updates by using cookie-based authentication in the handlers.
+- **UI Flow Consistency**: Modified the Electron app to load the root URL (/) instead of directly loading the login page (/login), providing a consistent experience between web and desktop versions.
+- **Shared Database Configuration**: Enhanced the application to use a shared database approach that synchronizes data between the Docker container, standalone app, and Electron versions, with proper backup mechanisms.
+
 ## Project Structure
 
 ```

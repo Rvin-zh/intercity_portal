@@ -33,6 +33,7 @@ show_help() {
     echo "  stop      Stop the application"
     echo "  restart   Restart the application"
     echo "  logs      View application logs"
+    echo "  setup     Set up shared database environment"
     echo "  help      Show this help message"
     echo ""
     echo "Default command is 'start'"
@@ -50,6 +51,13 @@ case "$1" in
         check_docker_compose
         echo "Restarting application..."
         docker compose down
+        
+        # Set up shared database environment
+        if [ -f "./setup-shared-db.sh" ]; then
+            echo "Setting up shared database environment..."
+            ./setup-shared-db.sh
+        fi
+        
         docker compose up -d --build
         echo "Application restarted successfully."
         ;;
@@ -58,6 +66,15 @@ case "$1" in
         echo "Showing application logs..."
         docker compose logs -f app
         ;;
+    "setup")
+        if [ -f "./setup-shared-db.sh" ]; then
+            echo "Setting up shared database environment..."
+            ./setup-shared-db.sh
+        else
+            echo "Error: setup-shared-db.sh script not found."
+            exit 1
+        fi
+        ;;
     "help"|"--help"|"-h")
         show_help
         ;;
@@ -65,6 +82,13 @@ case "$1" in
         check_docker
         check_docker_compose
         check_running
+        
+        # Set up shared database environment
+        if [ -f "./setup-shared-db.sh" ]; then
+            echo "Setting up shared database environment..."
+            ./setup-shared-db.sh
+        fi
+        
         echo "Starting application..."
         docker compose up -d --build
         echo "Waiting for application to become healthy..."
