@@ -216,11 +216,10 @@ if not exist "scripts\preserve-data.js" (
   echo     fs.copyFileSync(TEMP_BACKUP_PATH, DB_PATH); >> scripts\preserve-data.js
   echo     console.log(`Successfully restored database to ${DB_PATH}`); >> scripts\preserve-data.js
   echo. >> scripts\preserve-data.js
-  echo     // Make a timestamp backup as well >> scripts\preserve-data.js
-  echo     const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); >> scripts\preserve-data.js
-  echo     const timestampBackup = path.join(BACKUP_DIR, `backup-${timestamp}.db`); >> scripts\preserve-data.js
-  echo     fs.copyFileSync(TEMP_BACKUP_PATH, timestampBackup); >> scripts\preserve-data.js
-  echo     console.log(`Created timestamped backup at ${timestampBackup}`); >> scripts\preserve-data.js
+  echo     // Create a single permanent backup file >> scripts\preserve-data.js
+  echo     const permanentBackup = path.join(BACKUP_DIR, `current-backup.db`); >> scripts\preserve-data.js
+  echo     fs.copyFileSync(TEMP_BACKUP_PATH, permanentBackup); >> scripts\preserve-data.js
+  echo     console.log(`Updated permanent backup at ${permanentBackup}`); >> scripts\preserve-data.js
   echo. >> scripts\preserve-data.js
   echo     return true; >> scripts\preserve-data.js
   echo   } catch (error) { >> scripts\preserve-data.js

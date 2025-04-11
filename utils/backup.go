@@ -26,9 +26,8 @@ func BackupDatabase(dbPath string) (string, error) {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	// Create backup filename with timestamp
-	timestamp := time.Now().Format("20060102-150405")
-	backupFilename := fmt.Sprintf("securesignin-%s.db.bak", timestamp)
+	// Use a static backup filename (no timestamp)
+	backupFilename := "securesignin.db.bak"
 	backupPath := filepath.Join(backupDir, backupFilename)
 
 	// Copy database file to backup location
@@ -37,6 +36,13 @@ func BackupDatabase(dbPath string) (string, error) {
 		return "", fmt.Errorf("failed to open source database file: %w", err)
 	}
 	defer srcFile.Close()
+
+	// Remove existing backup file if it exists
+	if _, err := os.Stat(backupPath); err == nil {
+		if err := os.Remove(backupPath); err != nil {
+			return "", fmt.Errorf("failed to remove existing backup file: %w", err)
+		}
+	}
 
 	destFile, err := os.Create(backupPath)
 	if err != nil {
@@ -50,12 +56,13 @@ func BackupDatabase(dbPath string) (string, error) {
 		return "", fmt.Errorf("failed to copy database file: %w", err)
 	}
 
-	// Set file permissions to be readonly
-	if err := os.Chmod(backupPath, 0444); err != nil {
+	// Set file permissions to be readable/writable by owner, readable by others
+	if err := os.Chmod(backupPath, 0644); err != nil {
 		log.Printf("Warning: Failed to set backup file permissions: %v", err)
 	}
 
-	log.Printf("Successfully created database backup at %s", backupPath)
+	log.Printf("Successfully created database backup at %s (Last backup time: %s)",
+		backupPath, time.Now().Format("2006-01-02 15:04:05"))
 	return backupPath, nil
 }
 
@@ -75,59 +82,15 @@ func ScheduleBackups(dbPath string, intervalHours int) {
 			} else {
 				log.Printf("Scheduled backup completed: %s", backupPath)
 			}
-
-			// Clean up old backups (keep only the last 7)
-			cleanupOldBackups(filepath.Join(filepath.Dir(dbPath), "backups"), 7)
 		}
 	}()
 
 	log.Printf("Database backup scheduler started with %d hour interval", intervalHours)
 }
 
-// cleanupOldBackups removes backup files older than the most recent 'keep' files
+// cleanupOldBackups is no longer needed since we only keep one backup file
+// Keeping it for backward compatibility with any code that might call it
 func cleanupOldBackups(backupDir string, keep int) {
-	files, err := filepath.Glob(filepath.Join(backupDir, "securesignin-*.db.bak"))
-	if err != nil {
-		log.Printf("Failed to list backup files: %v", err)
-		return
-	}
-
-	// Return if we don't have more than 'keep' backups
-	if len(files) <= keep {
-		return
-	}
-
-	// Sort files by modification time (newest first)
-	type fileInfo struct {
-		path    string
-		modTime time.Time
-	}
-
-	fileInfos := make([]fileInfo, 0, len(files))
-	for _, f := range files {
-		info, err := os.Stat(f)
-		if err != nil {
-			log.Printf("Failed to stat file %s: %v", f, err)
-			continue
-		}
-		fileInfos = append(fileInfos, fileInfo{path: f, modTime: info.ModTime()})
-	}
-
-	// Sort by modification time (newest first)
-	for i := 0; i < len(fileInfos); i++ {
-		for j := i + 1; j < len(fileInfos); j++ {
-			if fileInfos[i].modTime.Before(fileInfos[j].modTime) {
-				fileInfos[i], fileInfos[j] = fileInfos[j], fileInfos[i]
-			}
-		}
-	}
-
-	// Delete older backups
-	for i := keep; i < len(fileInfos); i++ {
-		if err := os.Remove(fileInfos[i].path); err != nil {
-			log.Printf("Failed to remove old backup %s: %v", fileInfos[i].path, err)
-		} else {
-			log.Printf("Removed old backup: %s", fileInfos[i].path)
-		}
-	}
+	// This function is a no-op now since we maintain only one backup file
+	log.Printf("Note: cleanupOldBackups is deprecated as the system now maintains a single backup file")
 }

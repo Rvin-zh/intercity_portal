@@ -1,23 +1,28 @@
 services:
   app:
-    build: .
+    image: securesignin-app:local
+    user: root
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:
       - SQLITE_DB_PATH=/app/data/securesignin.db
-      - GOPROXY=https://proxy.golang.org,direct
     volumes:
       - encryption_keys:/app/keys
       - sqlite_data:/app/data
+      - ./templates:/app/templates
+      - ./static:/app/static
     networks:
       app-network:
         aliases:
           - app-service
     dns:
-      - 1.1.1.1
       - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 3
