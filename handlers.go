@@ -1230,6 +1230,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				HasSecurityQ:     hasSecurityQ,
 				SecurityQuestion: questionText,
 				QuestionID:       userID,
+				IsLoggedIn:       true,
 			})
 		}
 
@@ -1246,6 +1247,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				HasSecurityQ:     hasSecurityQ,
 				SecurityQuestion: questionText,
 				QuestionID:       userID,
+				IsLoggedIn:       true,
 			})
 		}
 
@@ -1273,6 +1275,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 					HasSecurityQ:     hasSecurityQ,
 					SecurityQuestion: questionText,
 					QuestionID:       userID,
+					IsLoggedIn:       true,
 				})
 			}
 
@@ -1285,6 +1288,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				HasSecurityQ:     true,
 				SecurityQuestion: securityQuestion,
 				QuestionID:       userID,
+				IsLoggedIn:       true,
 			})
 		} else {
 			// Add new question
@@ -1298,6 +1302,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 					UserID:       userID,
 					Username:     username,
 					HasSecurityQ: false,
+					IsLoggedIn:   true,
 				})
 			}
 
@@ -1310,6 +1315,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 				HasSecurityQ:     true,
 				SecurityQuestion: securityQuestion,
 				QuestionID:       userID,
+				IsLoggedIn:       true,
 			})
 		}
 	}
@@ -1323,6 +1329,7 @@ func setupSecurityQuestionHandler(c echo.Context) error {
 		HasSecurityQ:     hasSecurityQ,
 		SecurityQuestion: questionText,
 		QuestionID:       userID,
+		IsLoggedIn:       true,
 	})
 }
 
