@@ -91,6 +91,8 @@ func main() {
 	e.POST("/forgot", forgotHandler)
 	e.GET("/reset/:token", showResetFormHandler)
 	e.POST("/reset/:token", handleResetPasswordHandler)
+	e.GET("/security-reset", securityQuestionResetHandler)
+	e.POST("/security-reset", securityQuestionResetHandler)
 	e.GET("/health", healthCheckHandler)
 	e.GET("/register", registerHandler)
 	e.POST("/register", basicRegisterHandler)

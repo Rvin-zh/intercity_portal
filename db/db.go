@@ -175,6 +175,22 @@ func initializeSchema() error {
 		return fmt.Errorf("failed to create reset_codes table: %w", err)
 	}
 
+	// Create security_questions table
+	securityQuestionsTableSQL := `
+	CREATE TABLE IF NOT EXISTS security_questions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		question TEXT NOT NULL,
+		answer_hash TEXT NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	`
+	_, err = DB.Exec(securityQuestionsTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create security_questions table: %w", err)
+	}
+
 	// Add unique index separately
 	usernameIndexSQL := `CREATE UNIQUE INDEX IF NOT EXISTS idx_username ON users(username);`
 	_, err = DB.Exec(usernameIndexSQL)
@@ -213,6 +229,34 @@ func migrateSchema() error {
 		log.Println("Email column added successfully")
 	} else {
 		log.Println("Email column already exists in users table")
+	}
+
+	// Check if security_questions table exists
+	var tableExists int
+	err = DB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='security_questions'`).Scan(&tableExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if security_questions table exists: %w", err)
+	}
+
+	if tableExists == 0 {
+		log.Println("Creating security_questions table...")
+		securityQuestionsTableSQL := `
+		CREATE TABLE IF NOT EXISTS security_questions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			question TEXT NOT NULL,
+			answer_hash TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+		`
+		_, err := DB.Exec(securityQuestionsTableSQL)
+		if err != nil {
+			return fmt.Errorf("failed to create security_questions table: %w", err)
+		}
+		log.Println("security_questions table created successfully")
+	} else {
+		log.Println("security_questions table already exists")
 	}
 
 	return nil
@@ -421,4 +465,62 @@ func CheckEmailExists(email string) (bool, error) {
 	}
 
 	return exists > 0, nil
+}
+
+// --- Security Questions Functions ---
+
+// AddSecurityQuestion adds a security question and answer for a user
+func AddSecurityQuestion(userID int64, question string, answerHash string) error {
+	query := "INSERT INTO security_questions (user_id, question, answer_hash) VALUES (?, ?, ?)"
+	_, err := DB.Exec(query, userID, question, answerHash)
+	if err != nil {
+		return fmt.Errorf("error adding security question for user ID %d: %w", userID, err)
+	}
+	return nil
+}
+
+// GetSecurityQuestionByUserID retrieves the security question for a user
+func GetSecurityQuestionByUserID(userID int64) (int64, string, string, error) {
+	query := "SELECT id, question, answer_hash FROM security_questions WHERE user_id = ? LIMIT 1"
+	var id int64
+	var question, answerHash string
+	err := DB.QueryRow(query, userID).Scan(&id, &question, &answerHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, "", "", fmt.Errorf("no security question found for user ID %d", userID)
+		}
+		return 0, "", "", fmt.Errorf("error getting security question for user ID %d: %w", userID, err)
+	}
+	return id, question, answerHash, nil
+}
+
+// UpdateSecurityQuestion updates a user's security question and answer
+func UpdateSecurityQuestion(questionID int64, question string, answerHash string) error {
+	query := "UPDATE security_questions SET question = ?, answer_hash = ? WHERE id = ?"
+	_, err := DB.Exec(query, question, answerHash, questionID)
+	if err != nil {
+		return fmt.Errorf("error updating security question ID %d: %w", questionID, err)
+	}
+	return nil
+}
+
+// HasSecurityQuestion checks if a user has set up a security question
+func HasSecurityQuestion(userID int64) (bool, error) {
+	query := "SELECT COUNT(*) FROM security_questions WHERE user_id = ?"
+	var count int
+	err := DB.QueryRow(query, userID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("error checking if user ID %d has security questions: %w", userID, err)
+	}
+	return count > 0, nil
+}
+
+// DeleteSecurityQuestions removes all security questions for a user
+func DeleteSecurityQuestions(userID int64) error {
+	query := "DELETE FROM security_questions WHERE user_id = ?"
+	_, err := DB.Exec(query, userID)
+	if err != nil {
+		return fmt.Errorf("error deleting security questions for user ID %d: %w", userID, err)
+	}
+	return nil
 }

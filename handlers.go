@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,17 +107,22 @@ func renderTemplate(c echo.Context, tmpl string, data interface{}) error {
 
 // Page data struct
 type PageData struct {
-	Title         string
-	Error         string
-	Success       string
-	ActivePage    string
-	Users         []map[string]interface{}
-	LoginLogs     []map[string]interface{}
-	IsLoggedIn    bool
-	Username      string
-	ResetToken    string
-	Email         string
-	ShowCodeInput bool
+	Title            string
+	Error            string
+	Success          string
+	ActivePage       string
+	Users            []map[string]interface{}
+	LoginLogs        []map[string]interface{}
+	IsLoggedIn       bool
+	Username         string
+	ResetToken       string
+	Email            string
+	ShowCodeInput    bool
+	SecurityQuestion string
+	QuestionID       int64
+	UserID           int64
+	ResetMethod      string // "email" or "security"
+	HasSecurityQ     bool   // Whether the user has a security question set up
 	// Fields for registration form data persistence
 	DOB string
 	SSN string
@@ -195,12 +201,14 @@ func invalidateResetToken(token string) {
 
 // RegistrationForm represents the registration form data
 type RegistrationForm struct {
-	Username        string `form:"username"`
-	Email           string `form:"email"`
-	Password        string `form:"password"`
-	ConfirmPassword string `form:"confirmPassword"`
-	DOB             string `form:"dob"`
-	SSN             string `form:"ssn"`
+	Username         string `form:"username"`
+	Email            string `form:"email"`
+	Password         string `form:"password"`
+	ConfirmPassword  string `form:"confirmPassword"`
+	DOB              string `form:"dob"`
+	SSN              string `form:"ssn"`
+	SecurityQuestion string `form:"security_question"`
+	SecurityAnswer   string `form:"security_answer"`
 }
 
 // --- Handlers ---
@@ -688,6 +696,8 @@ func basicRegisterHandler(c echo.Context) error {
 	log.Printf("SSN in form: %v", form.Get("ssn"))
 	log.Printf("Password in form: %v", len(form.Get("password")) > 0)
 	log.Printf("ConfirmPassword in form: %v", len(form.Get("confirmPassword")) > 0)
+	log.Printf("Security Question in form: %v", form.Get("security_question"))
+	log.Printf("Security Answer in form: %v", len(form.Get("security_answer")) > 0)
 
 	// Extract form values
 	username := strings.TrimSpace(c.FormValue("username"))
@@ -696,9 +706,11 @@ func basicRegisterHandler(c echo.Context) error {
 	confirmPassword := c.FormValue("confirmPassword")
 	dob := strings.TrimSpace(c.FormValue("dob"))
 	ssn := strings.TrimSpace(c.FormValue("ssn"))
+	securityQuestion := strings.TrimSpace(c.FormValue("security_question"))
+	securityAnswer := strings.TrimSpace(c.FormValue("security_answer"))
 
-	log.Printf("Extracted values - username: [%s], email: [%s], dob: [%s], ssn: [%s], password length: %d, confirmPassword length: %d",
-		username, email, dob, ssn, len(password), len(confirmPassword))
+	log.Printf("Extracted values - username: [%s], email: [%s], dob: [%s], ssn: [%s], password length: %d, confirmPassword length: %d, security question: [%s], security answer present: %v",
+		username, email, dob, ssn, len(password), len(confirmPassword), securityQuestion, securityAnswer != "")
 
 	// Detailed validation - individually check each field
 	missingFields := []string{}
@@ -719,6 +731,12 @@ func basicRegisterHandler(c echo.Context) error {
 	}
 	if ssn == "" {
 		missingFields = append(missingFields, "ssn")
+	}
+	if securityQuestion == "" {
+		missingFields = append(missingFields, "security_question")
+	}
+	if securityAnswer == "" {
+		missingFields = append(missingFields, "security_answer")
 	}
 
 	if len(missingFields) > 0 {
@@ -804,6 +822,21 @@ func basicRegisterHandler(c echo.Context) error {
 		})
 	}
 
+	// Hash security answer (always convert to lowercase for case-insensitive comparison later)
+	hashedSecurityAnswer, err := bcrypt.GenerateFromPassword([]byte(strings.ToLower(securityAnswer)), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("ERROR: Failed to hash security answer: %v", err)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Error processing security answer",
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
 	// Save to database
 	log.Printf("Attempting database insert")
 	query := "INSERT INTO users (username, email, password, date_of_birth, social_security) VALUES (?, ?, ?, ?, ?)"
@@ -821,9 +854,256 @@ func basicRegisterHandler(c echo.Context) error {
 		})
 	}
 
-	userID, _ := result.LastInsertId()
+	userID, err := result.LastInsertId()
+	if err != nil {
+		log.Printf("ERROR: Failed to get lastInsertId: %v", err)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Database error: " + err.Error(),
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	// Add security question
+	err = db.AddSecurityQuestion(userID, securityQuestion, string(hashedSecurityAnswer))
+	if err != nil {
+		log.Printf("ERROR: Failed to save security question: %v", err)
+		// Don't block registration if security question fails
+		// But log the error
+	}
+
 	log.Printf("SUCCESS: User registered with ID: %d", userID)
 	return c.Redirect(http.StatusSeeOther, "/login?success=Registration successful! Please log in.")
+}
+
+// --- Security Questions Reset Handler ---
+func securityQuestionResetHandler(c echo.Context) error {
+	if c.Request().Method == "POST" {
+		username := strings.TrimSpace(c.FormValue("username"))
+		questionID := c.FormValue("question_id")
+		userID := c.FormValue("user_id")
+		answer := c.FormValue("security_answer")
+		newPassword := c.FormValue("newPassword")
+		confirmPassword := c.FormValue("confirmPassword")
+
+		log.Printf("Debug - Security question reset POST: username=%s, questionID=%s, userID=%s, answer provided=%v",
+			username, questionID, userID, answer != "")
+
+		// If we only have username, find the user and their security question
+		if username != "" && questionID == "" && userID == "" {
+			// Get user by username
+			userRow, err := db.GetUserByUsername(username)
+			if err != nil {
+				log.Printf("Error getting user by username: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "An error occurred. Please try again.",
+					ActivePage: "forgot",
+					Username:   username,
+				})
+			}
+
+			var userIDInt int64
+			var storedUsername string
+			var storedDOB string
+			var storedSSN string
+			var storedPassword string
+			var storedEmail string
+
+			err = userRow.Scan(&userIDInt, &storedUsername, &storedDOB, &storedSSN, &storedPassword, &storedEmail)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					return renderTemplate(c, "security_reset.html", PageData{
+						Title:      "Reset Password",
+						Error:      "No account found with this username",
+						ActivePage: "forgot",
+						Username:   username,
+					})
+				}
+				log.Printf("Error scanning user data: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "An error occurred. Please try again.",
+					ActivePage: "forgot",
+					Username:   username,
+				})
+			}
+
+			// Check if user has security question
+			hasSecurityQ, err := db.HasSecurityQuestion(userIDInt)
+			if err != nil {
+				log.Printf("Error checking for security question: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "An error occurred. Please try again.",
+					ActivePage: "forgot",
+					Username:   username,
+				})
+			}
+
+			if !hasSecurityQ {
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:        "Reset Password",
+					Error:        "This account doesn't have a security question set up. Please use email reset instead.",
+					ActivePage:   "forgot",
+					Username:     username,
+					HasSecurityQ: false,
+				})
+			}
+
+			// Get security question
+			questionIDInt, question, _, err := db.GetSecurityQuestionByUserID(userIDInt)
+			if err != nil {
+				log.Printf("Error getting security question: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "An error occurred. Please try again.",
+					ActivePage: "forgot",
+					Username:   username,
+				})
+			}
+
+			// Show the security question form
+			return renderTemplate(c, "security_reset.html", PageData{
+				Title:            "Reset Password",
+				ActivePage:       "forgot",
+				Username:         username,
+				SecurityQuestion: question,
+				QuestionID:       questionIDInt,
+				UserID:           userIDInt,
+				HasSecurityQ:     true,
+			})
+		}
+
+		// If we have the security answer and new password, process the password reset
+		if answer != "" && userID != "" && questionID != "" && newPassword != "" && confirmPassword != "" {
+			userIDInt, err := strconv.ParseInt(userID, 10, 64)
+			if err != nil {
+				log.Printf("Error parsing user ID: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "Invalid request. Please try again.",
+					ActivePage: "forgot",
+				})
+			}
+
+			questionIDInt, err := strconv.ParseInt(questionID, 10, 64)
+			if err != nil {
+				log.Printf("Error parsing question ID: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "Invalid request. Please try again.",
+					ActivePage: "forgot",
+				})
+			}
+
+			// Get security question to re-display if needed
+			_, question, answerHash, err := db.GetSecurityQuestionByUserID(userIDInt)
+			if err != nil {
+				log.Printf("Error getting security question: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:      "Reset Password",
+					Error:      "An error occurred. Please try again.",
+					ActivePage: "forgot",
+				})
+			}
+
+			// Verify passwords match
+			if newPassword != confirmPassword {
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:            "Reset Password",
+					Error:            "Passwords do not match",
+					ActivePage:       "forgot",
+					Username:         username,
+					SecurityQuestion: question,
+					QuestionID:       questionIDInt,
+					UserID:           userIDInt,
+					HasSecurityQ:     true,
+				})
+			}
+
+			if len(newPassword) < 8 {
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:            "Reset Password",
+					Error:            "Password must be at least 8 characters long",
+					ActivePage:       "forgot",
+					Username:         username,
+					SecurityQuestion: question,
+					QuestionID:       questionIDInt,
+					UserID:           userIDInt,
+					HasSecurityQ:     true,
+				})
+			}
+
+			// Verify security answer
+			err = bcrypt.CompareHashAndPassword([]byte(answerHash), []byte(strings.ToLower(strings.TrimSpace(answer))))
+			if err != nil {
+				log.Printf("Invalid security answer for user ID %d", userIDInt)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:            "Reset Password",
+					Error:            "Incorrect answer to security question",
+					ActivePage:       "forgot",
+					Username:         username,
+					SecurityQuestion: question,
+					QuestionID:       questionIDInt,
+					UserID:           userIDInt,
+					HasSecurityQ:     true,
+				})
+			}
+
+			// Hash new password
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+			if err != nil {
+				log.Printf("Error hashing password: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:            "Reset Password",
+					Error:            "An error occurred. Please try again.",
+					ActivePage:       "forgot",
+					Username:         username,
+					SecurityQuestion: question,
+					QuestionID:       questionIDInt,
+					UserID:           userIDInt,
+					HasSecurityQ:     true,
+				})
+			}
+
+			// Update password
+			err = db.UpdateUserPassword(int(userIDInt), string(hashedPassword))
+			if err != nil {
+				log.Printf("Error updating password: %v", err)
+				return renderTemplate(c, "security_reset.html", PageData{
+					Title:            "Reset Password",
+					Error:            "An error occurred updating password. Please try again.",
+					ActivePage:       "forgot",
+					Username:         username,
+					SecurityQuestion: question,
+					QuestionID:       questionIDInt,
+					UserID:           userIDInt,
+					HasSecurityQ:     true,
+				})
+			}
+
+			log.Printf("Password successfully reset for user ID %d using security question", userIDInt)
+			return c.Redirect(http.StatusSeeOther, "/login?success=Password reset successful. Please log in with your new password.")
+		}
+
+		// If we reach here, something is wrong with the form data
+		return renderTemplate(c, "security_reset.html", PageData{
+			Title:      "Reset Password",
+			Error:      "Invalid request. Please try again.",
+			ActivePage: "forgot",
+		})
+	}
+
+	// GET request - show initial form
+	return renderTemplate(c, "security_reset.html", PageData{
+		Title:      "Reset Password with Security Question",
+		ActivePage: "forgot",
+	})
 }
 
 // --- End Handlers ---
