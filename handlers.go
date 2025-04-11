@@ -86,6 +86,7 @@ func init() {
 // Render a template given a model
 func renderTemplate(c echo.Context, tmpl string, data interface{}) error {
 	log.Printf("Attempting to render template: %s", tmpl)
+	log.Printf("Template data: %+v", data)
 
 	t, ok := templates[tmpl]
 	if !ok {
@@ -105,15 +106,20 @@ func renderTemplate(c echo.Context, tmpl string, data interface{}) error {
 
 // Page data struct
 type PageData struct {
-	Title      string
-	Error      string
-	Success    string
-	ActivePage string
-	Users      []map[string]interface{}
-	LoginLogs  []map[string]interface{}
-	IsLoggedIn bool
-	Username   string
-	ResetToken string
+	Title         string
+	Error         string
+	Success       string
+	ActivePage    string
+	Users         []map[string]interface{}
+	LoginLogs     []map[string]interface{}
+	IsLoggedIn    bool
+	Username      string
+	ResetToken    string
+	Email         string
+	ShowCodeInput bool
+	// Fields for registration form data persistence
+	DOB string
+	SSN string
 }
 
 // --- Password Reset Token Store (In-Memory - Demo Only) ---
@@ -186,6 +192,16 @@ func invalidateResetToken(token string) {
 }
 
 // --- End Token Store ---
+
+// RegistrationForm represents the registration form data
+type RegistrationForm struct {
+	Username        string `form:"username"`
+	Email           string `form:"email"`
+	Password        string `form:"password"`
+	ConfirmPassword string `form:"confirmPassword"`
+	DOB             string `form:"dob"`
+	SSN             string `form:"ssn"`
+}
 
 // --- Handlers ---
 
@@ -278,27 +294,39 @@ func loginHandler(c echo.Context) error {
 
 // Auth handler - Process login form
 func basicAuthHandler(c echo.Context) error {
-	username := strings.TrimSpace(c.FormValue("username"))
+	usernameOrEmail := strings.TrimSpace(c.FormValue("username"))
 	password := c.FormValue("password")
 
-	if username == "" || password == "" {
+	if usernameOrEmail == "" || password == "" {
 		data := PageData{
 			Title:      "Login",
-			Error:      "Username and password cannot be empty",
-			Username:   username, // Preserve the username
+			Error:      "Username/Email and password cannot be empty",
+			Username:   usernameOrEmail, // Preserve the input
 			ActivePage: "login",
 		}
 		return renderTemplate(c, "login.html", data)
 	}
 
-	// Get user from database
-	userRow, err := db.GetUserByUsername(username)
+	var userRow *sql.Row
+	var err error
+
+	// Check if input is an email (contains @)
+	isEmail := strings.Contains(usernameOrEmail, "@")
+
+	if isEmail {
+		// Get user by email
+		userRow, err = db.GetUserByEmail(usernameOrEmail)
+	} else {
+		// Get user by username
+		userRow, err = db.GetUserByUsername(usernameOrEmail)
+	}
+
 	if err != nil {
 		log.Printf("Error getting user: %v", err)
 		data := PageData{
 			Title:      "Login",
 			Error:      "An error occurred while checking credentials. Please try again.",
-			Username:   username, // Preserve the username
+			Username:   usernameOrEmail, // Preserve the input
 			ActivePage: "login",
 		}
 		return renderTemplate(c, "login.html", data)
@@ -306,18 +334,21 @@ func basicAuthHandler(c echo.Context) error {
 
 	var userID int64 // Use int64 for potential Postgres ID
 	var storedUsername string
-	var storedDOB string // Variable to hold DOB (needed for Scan but not used in login)
-	var storedSSN string // Variable to hold SSN (needed for Scan but not used in login)
+	var storedDOB string
+	var storedSSN string
 	var storedPassword string
+	var storedEmail string
 
-	err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword)
+	// Scan user data (now both email and username lookups have the same structure)
+	err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword, &storedEmail)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// User not found
 			data := PageData{
 				Title:      "Login",
-				Error:      "Invalid username or password",
-				Username:   username, // Preserve the username
+				Error:      "Invalid username/email or password",
+				Username:   usernameOrEmail, // Preserve the input
 				ActivePage: "login",
 			}
 			return renderTemplate(c, "login.html", data)
@@ -326,7 +357,7 @@ func basicAuthHandler(c echo.Context) error {
 		data := PageData{
 			Title:      "Login",
 			Error:      "An error occurred while checking credentials. Please try again.",
-			Username:   username, // Preserve the username
+			Username:   usernameOrEmail, // Preserve the input
 			ActivePage: "login",
 		}
 		return renderTemplate(c, "login.html", data)
@@ -336,27 +367,24 @@ func basicAuthHandler(c echo.Context) error {
 	err = bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(password))
 	if err != nil {
 		// Log failed login attempt before returning error
-		// We don't have the correct userID if password comparison fails,
-		// but we know the username attempt. Consider logging username or using a placeholder ID.
-		// db.LogLoginAttempt(0, c.RealIP(), false) // Example: Log with placeholder ID 0
-		log.Printf("Login failed for user: %s (Invalid Password) from %s", username, c.RealIP())
+		log.Printf("Login failed for user: %s (Invalid Password) from %s", usernameOrEmail, c.RealIP())
 		data := PageData{
 			Title:      "Login",
-			Error:      "Invalid username or password",
-			Username:   username, // Preserve the username
+			Error:      "Invalid username/email or password",
+			Username:   usernameOrEmail, // Preserve the input
 			ActivePage: "login",
 		}
 		return renderTemplate(c, "login.html", data)
 	}
 
-	log.Printf("User %s (ID: %d) logged in successfully from %s", username, userID, c.RealIP())
+	log.Printf("User %s (ID: %d) logged in successfully from %s", storedUsername, userID, c.RealIP())
 	// Log successful login attempt
 	if err := db.LogLoginAttempt(userID, c.RealIP(), true); err != nil {
 		log.Printf("Warning: Failed to log successful login attempt for user ID %d: %v", userID, err)
 		// Continue with login even if logging fails
 	}
 
-	return c.Redirect(http.StatusSeeOther, "/dashboard?success=Successfully logged in&user="+username)
+	return c.Redirect(http.StatusSeeOther, "/dashboard?success=Successfully logged in&user="+storedUsername)
 }
 
 // Register handler - Render registration page
@@ -364,181 +392,181 @@ func registerHandler(c echo.Context) error {
 	data := PageData{
 		Title:      "Register",
 		ActivePage: "register",
+		Email:      "",
+		Username:   "",
+		DOB:        "",
+		SSN:        "",
 	}
 	return renderTemplate(c, "register.html", data)
 }
 
-// Basic Register Handler - Process registration form
-func basicRegisterHandler(c echo.Context) error {
-	username := strings.TrimSpace(c.FormValue("username"))
-	password := c.FormValue("password")
-	dob := strings.TrimSpace(c.FormValue("dob"))
-	ssn := strings.TrimSpace(c.FormValue("ssn"))
-	ipAddress := c.RealIP()
-
-	if username == "" || password == "" || dob == "" || ssn == "" {
-		return renderTemplate(c, "register.html", PageData{
-			Title:      "Register",
-			Error:      "All fields are required",
-			ActivePage: "register",
-		})
-	}
-	if len(password) < 8 {
-		return renderTemplate(c, "register.html", PageData{
-			Title:      "Register",
-			Error:      "Password must be at least 8 characters long",
-			ActivePage: "register",
-		})
-	}
-
-	// Check if user exists
-	row, err := db.GetUserByUsername(username)
-	if err != nil {
-		log.Printf("ERROR preparing username check: %v", err)
-		// Log detailed information about the error
-		log.Printf("ERROR TYPE: %T", err)
-		log.Printf("Username attempted: %s", username)
-		log.Printf("Database connection state: %v", db.DB != nil)
-		if db.DB != nil {
-			pingErr := db.DB.Ping()
-			log.Printf("Database ping result: %v", pingErr)
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking username.")
-	}
-
-	// Attempt to scan. If it succeeds, user exists.
-	var dummyID int
-	scanErr := row.Scan(&dummyID, new(string), new(string), new(string), new(string)) // Scan into dummy vars
-
-	if scanErr == nil {
-		// User exists
-		return renderTemplate(c, "register.html", PageData{
-			Title:      "Register",
-			Error:      "Username already taken",
-			ActivePage: "register",
-		})
-	} else if scanErr != sql.ErrNoRows {
-		// An actual error occurred during scan (not just 'no rows')
-		log.Printf("Error scanning during username check for %s: %v", username, scanErr)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking username.")
-	}
-	// sql.ErrNoRows means user does not exist, proceed with registration
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("Error hashing password: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error processing registration.")
-	}
-
-	newUserID, err := db.AddUser(username, string(hashedPassword), dob, ssn)
-	if err != nil {
-		log.Printf("Error creating user %s: %v", username, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create user.")
-	}
-
-	log.Printf("User %s (ID: %d) registered successfully from %s", username, newUserID, ipAddress)
-	return c.Redirect(http.StatusSeeOther, "/login?success=Registration successful! Please log in.")
+// Generate a random 6-digit code
+func generateVerificationCode() string {
+	code := make([]byte, 3) // 3 bytes = 6 hex digits
+	rand.Read(code)
+	return fmt.Sprintf("%06x", code)[:6]
 }
 
 // Forgot Password handler - Render/Process forgot password form
 func forgotHandler(c echo.Context) error {
-	if c.Request().Method == http.MethodPost {
-		username := strings.TrimSpace(c.FormValue("username"))
-		dob := strings.TrimSpace(c.FormValue("dob"))
-		ssn := strings.TrimSpace(c.FormValue("ssn"))
+	if c.Request().Method == "POST" {
+		email := strings.TrimSpace(c.FormValue("email"))
+		resetCode := c.FormValue("resetCode")
+		newPassword := c.FormValue("newPassword")
+		confirmPassword := c.FormValue("confirmPassword")
 
-		if username == "" || dob == "" || ssn == "" {
+		log.Printf("Debug - Forgot password POST: email=%s, resetCode=%s, newPassword length=%d",
+			email, resetCode, len(newPassword))
+
+		// Validate email
+		if email == "" {
 			return renderTemplate(c, "forgot.html", PageData{
 				Title:      "Forgot Password",
-				Error:      "All fields are required",
+				Error:      "Email is required",
 				ActivePage: "forgot",
 			})
 		}
 
-		// Get user from database
-		userRow, err := db.GetUserByUsername(username)
+		// Get user by email
+		row, err := db.GetUserByEmail(email)
 		if err != nil {
-			log.Printf("Error finding user %s: %v", username, err)
+			log.Printf("Error getting user by email: %v", err)
 			return renderTemplate(c, "forgot.html", PageData{
 				Title:      "Forgot Password",
-				Error:      "Invalid credentials provided",
+				Error:      "An error occurred. Please try again.",
 				ActivePage: "forgot",
+				Email:      email,
 			})
 		}
 
-		var userID int
-		var storedUsername string
-		var storedDOB string
-		var storedSSN string
-		var storedPassword string
-
-		err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword)
+		var userID int64
+		var username string
+		var storedEmail string
+		err = row.Scan(&userID, &username, &storedEmail)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				log.Printf("Password reset request: User %s not found", username)
 				return renderTemplate(c, "forgot.html", PageData{
 					Title:      "Forgot Password",
-					Error:      "Invalid credentials provided",
+					Error:      "No account found with this email address",
 					ActivePage: "forgot",
+					Email:      email,
 				})
 			}
 			log.Printf("Error scanning user data: %v", err)
-			return echo.NewHTTPError(http.StatusInternalServerError, "Error processing request.")
-		}
-
-		// Verify date of birth and SSN
-		log.Printf("DEBUG: Comparing DOB - provided: '%s' stored: '%s'", dob, storedDOB)
-		log.Printf("DEBUG: Comparing SSN - provided: '%s' stored: '%s'", ssn, storedSSN)
-
-		// Handle the timestamp format in the stored DOB
-		storedDOBPrefix := ""
-		if strings.Contains(storedDOB, "T") {
-			storedDOBPrefix = strings.Split(storedDOB, "T")[0]
-		} else {
-			storedDOBPrefix = storedDOB
-		}
-		log.Printf("DEBUG: After splitting, comparing: '%s' with '%s'", dob, storedDOBPrefix)
-
-		// Try both direct comparison and prefix comparison
-		if dob != storedDOBPrefix && dob != storedDOB && !strings.HasPrefix(storedDOB, dob) {
-			log.Printf("DEBUG: All DOB comparisons failed")
-			log.Printf("Password reset failed: Invalid DOB or SSN for user %s", username)
 			return renderTemplate(c, "forgot.html", PageData{
 				Title:      "Forgot Password",
-				Error:      "Invalid credentials provided",
+				Error:      "An error occurred. Please try again.",
 				ActivePage: "forgot",
+				Email:      email,
 			})
 		}
 
-		if ssn != storedSSN {
-			log.Printf("DEBUG: SSN comparison failed")
-			log.Printf("Password reset failed: Invalid DOB or SSN for user %s", username)
+		// If reset code is not provided, generate and send one
+		if resetCode == "" {
+			code := generateVerificationCode()
+			expiresAt := time.Now().Add(15 * time.Minute)
+
+			log.Printf("Debug - Generating new reset code '%s' for user ID %d", code, userID)
+
+			err = db.StoreResetCode(userID, code, expiresAt)
+			if err != nil {
+				log.Printf("Error storing reset code: %v", err)
+				return renderTemplate(c, "forgot.html", PageData{
+					Title:      "Forgot Password",
+					Error:      "An error occurred generating reset code. Please try again.",
+					ActivePage: "forgot",
+					Email:      email,
+				})
+			}
+
+			// TODO: Send email with reset code
+			// For now, we'll just show it on screen for testing
 			return renderTemplate(c, "forgot.html", PageData{
 				Title:      "Forgot Password",
-				Error:      "Invalid credentials provided",
+				Success:    fmt.Sprintf("Reset code sent to your email: %s (Code: %s)", email, code),
 				ActivePage: "forgot",
+				Email:      email,
 			})
 		}
 
-		// If we get here, both DOB and SSN matched
-		log.Printf("DEBUG: DOB and SSN verification succeeded for user %s", username)
-
-		// Generate reset token
-		token, err := storeResetToken(userID)
+		// Verify reset code and update password
+		log.Printf("Debug - Validating reset code '%s'", resetCode)
+		userID, err = db.ValidateResetCode(resetCode)
 		if err != nil {
-			log.Printf("Error storing reset token for user ID %d: %v", userID, err)
-			return echo.NewHTTPError(http.StatusInternalServerError, "Error processing request.")
+			log.Printf("Debug - Reset code validation failed: %v", err)
+			return renderTemplate(c, "forgot.html", PageData{
+				Title:      "Forgot Password",
+				Error:      "Invalid or expired reset code",
+				ActivePage: "forgot",
+				Email:      email,
+				Success:    "true", // Keep showing the reset code form
+			})
 		}
 
-		// Redirect to reset password page
-		return c.Redirect(http.StatusSeeOther, "/reset/"+token)
+		log.Printf("Debug - Reset code validated successfully for user ID %d", userID)
+
+		// Validate new password
+		if newPassword == "" || newPassword != confirmPassword {
+			return renderTemplate(c, "forgot.html", PageData{
+				Title:      "Forgot Password",
+				Error:      "Passwords do not match",
+				ActivePage: "forgot",
+				Email:      email,
+				Success:    "true", // Keep showing the reset code form
+			})
+		}
+
+		if len(newPassword) < 8 {
+			return renderTemplate(c, "forgot.html", PageData{
+				Title:      "Forgot Password",
+				Error:      "Password must be at least 8 characters long",
+				ActivePage: "forgot",
+				Email:      email,
+				Success:    "true", // Keep showing the reset code form
+			})
+		}
+
+		// Hash new password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("Error hashing password: %v", err)
+			return renderTemplate(c, "forgot.html", PageData{
+				Title:      "Forgot Password",
+				Error:      "An error occurred. Please try again.",
+				ActivePage: "forgot",
+				Email:      email,
+				Success:    "true", // Keep showing the reset code form
+			})
+		}
+
+		// Update password and mark reset code as used
+		err = db.UpdateUserPassword(int(userID), string(hashedPassword))
+		if err != nil {
+			log.Printf("Error updating password: %v", err)
+			return renderTemplate(c, "forgot.html", PageData{
+				Title:      "Forgot Password",
+				Error:      "An error occurred updating password. Please try again.",
+				ActivePage: "forgot",
+				Email:      email,
+				Success:    "true", // Keep showing the reset code form
+			})
+		}
+
+		err = db.MarkResetCodeUsed(resetCode)
+		if err != nil {
+			log.Printf("Error marking reset code as used: %v", err)
+			// Non-critical error, continue
+		}
+
+		return c.Redirect(http.StatusSeeOther, "/login?success=Password reset successful. Please log in with your new password.")
 	}
 
-	data := PageData{
+	// GET request - show form
+	return renderTemplate(c, "forgot.html", PageData{
 		Title:      "Forgot Password",
 		ActivePage: "forgot",
-	}
-	return renderTemplate(c, "forgot.html", data)
+		Email:      "", // Initialize Email field to empty string
+	})
 }
 
 // Show Reset Password Form handler
@@ -627,6 +655,175 @@ func logoutHandler(c echo.Context) error {
 func isValidEmail(email string) bool {
 	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	return re.MatchString(email)
+}
+
+// Basic Register Handler - Process registration form
+func basicRegisterHandler(c echo.Context) error {
+	// For GET requests, just show the form
+	if c.Request().Method == "GET" {
+		log.Printf("GET request for registration form")
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			ActivePage: "register",
+		})
+	}
+
+	log.Printf("Processing POST request for registration")
+
+	// Force parse form - critical for reading form values
+	err := c.Request().ParseForm()
+	if err != nil {
+		log.Printf("ERROR parsing form: %v", err)
+	}
+
+	// Log all form data for debugging
+	log.Printf("Form data: %+v", c.Request().Form)
+	log.Printf("PostForm data: %+v", c.Request().PostForm)
+
+	// Direct check for specific form fields
+	form := c.Request().Form
+	log.Printf("Username in form: %v", form.Get("username"))
+	log.Printf("Email in form: %v", form.Get("email"))
+	log.Printf("DOB in form: %v", form.Get("dob"))
+	log.Printf("SSN in form: %v", form.Get("ssn"))
+	log.Printf("Password in form: %v", len(form.Get("password")) > 0)
+	log.Printf("ConfirmPassword in form: %v", len(form.Get("confirmPassword")) > 0)
+
+	// Extract form values
+	username := strings.TrimSpace(c.FormValue("username"))
+	email := strings.TrimSpace(c.FormValue("email"))
+	password := c.FormValue("password")
+	confirmPassword := c.FormValue("confirmPassword")
+	dob := strings.TrimSpace(c.FormValue("dob"))
+	ssn := strings.TrimSpace(c.FormValue("ssn"))
+
+	log.Printf("Extracted values - username: [%s], email: [%s], dob: [%s], ssn: [%s], password length: %d, confirmPassword length: %d",
+		username, email, dob, ssn, len(password), len(confirmPassword))
+
+	// Detailed validation - individually check each field
+	missingFields := []string{}
+	if username == "" {
+		missingFields = append(missingFields, "username")
+	}
+	if email == "" {
+		missingFields = append(missingFields, "email")
+	}
+	if password == "" {
+		missingFields = append(missingFields, "password")
+	}
+	if confirmPassword == "" {
+		missingFields = append(missingFields, "confirmPassword")
+	}
+	if dob == "" {
+		missingFields = append(missingFields, "dob")
+	}
+	if ssn == "" {
+		missingFields = append(missingFields, "ssn")
+	}
+
+	if len(missingFields) > 0 {
+		log.Printf("ERROR: Missing fields: %v", missingFields)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "All fields are required",
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	// Validate email format
+	if !isValidEmail(email) {
+		log.Printf("ERROR: Invalid email format: %s", email)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Please enter a valid email address",
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	// Check if email already exists
+	emailExists, err := db.CheckEmailExists(email)
+	if err != nil {
+		log.Printf("ERROR: Failed to check email existence: %v", err)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "An error occurred while processing your registration. Please try again.",
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	if emailExists {
+		log.Printf("ERROR: Email %s already in use", email)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Email address is already registered. Please use a different email or try to reset your password.",
+			ActivePage: "register",
+			Username:   username,
+			Email:      "", // Clear the email to prevent duplicate submission attempts
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	if password != confirmPassword {
+		log.Printf("ERROR: Passwords do not match")
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Passwords do not match",
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("ERROR: Failed to hash password: %v", err)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Error processing password",
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	// Save to database
+	log.Printf("Attempting database insert")
+	query := "INSERT INTO users (username, email, password, date_of_birth, social_security) VALUES (?, ?, ?, ?, ?)"
+	result, err := db.DB.Exec(query, username, email, string(hashedPassword), dob, ssn)
+	if err != nil {
+		log.Printf("ERROR: Database error: %v", err)
+		return renderTemplate(c, "register.html", PageData{
+			Title:      "Register",
+			Error:      "Database error: " + err.Error(),
+			ActivePage: "register",
+			Username:   username,
+			Email:      email,
+			DOB:        dob,
+			SSN:        ssn,
+		})
+	}
+
+	userID, _ := result.LastInsertId()
+	log.Printf("SUCCESS: User registered with ID: %d", userID)
+	return c.Redirect(http.StatusSeeOther, "/login?success=Registration successful! Please log in.")
 }
 
 // --- End Handlers ---
