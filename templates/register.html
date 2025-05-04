@@ -30,7 +30,7 @@
             
             <div class="form-group">
                 <label for="ssn" class="form-label">Social Security Number (SSN)</label>
-                <input type="text" id="ssn" name="ssn" class="form-input" placeholder="Enter 9-digit SSN" autocomplete="off" required maxlength="9" inputmode="numeric">
+                <input type="text" id="ssn" name="ssn" class="form-input" placeholder="XXX-XX-XXXX" autocomplete="off" required maxlength="11" inputmode="numeric">
                 <div id="ssnMessage" class="form-error-message" style="display: none; color: red; font-size: 0.8em; margin-top: 4px;"></div>
             </div>
             
@@ -214,15 +214,14 @@
     
     // Add SSN validation function
     function validateSSN() {
-        const ssnInput = document.getElementById('ssn');
+        const ssnRaw = document.getElementById('ssn').value.replace(/\D/g, '');
         const messageDiv = document.getElementById('ssnMessage');
-        const ssn = ssnInput.value;
-        if (ssn.length === 9) {
+        if (ssnRaw.length === 9) {
             messageDiv.textContent = 'SSN valid';
             messageDiv.style.color = 'green';
             return true;
         } else {
-            messageDiv.textContent = 'SSN must be exactly 9 digits';
+            messageDiv.textContent = 'SSN must be exactly 9 digits (XXX-XX-XXXX)';
             messageDiv.style.color = 'red';
             return false;
         }
@@ -280,12 +279,27 @@
         // Add SSN validation listeners
         const ssnInput = document.getElementById('ssn');
         if (ssnInput) {
+            // Format and validate during typing
             ssnInput.addEventListener('input', function() {
-                this.value = this.value.replace(/\D/g, '');
-                if (this.value.length > 9) this.value = this.value.slice(0, 9);
+                let digits = this.value.replace(/\D/g, '');
+                if (digits.length > 9) digits = digits.slice(0, 9);
+                // format as XXX-XX-XXXX
+                let parts = [];
+                if (digits.length > 0) parts.push(digits.slice(0, 3));
+                if (digits.length > 3) parts.push(digits.slice(3, 5));
+                if (digits.length > 5) parts.push(digits.slice(5, 9));
+                this.value = parts.join('-');
                 validateSSN();
             });
-            ssnInput.addEventListener('blur', validateSSN);
+            // Hide message when user focuses again
+            ssnInput.addEventListener('focus', function() {
+                document.getElementById('ssnMessage').style.display = 'none';
+            });
+            // On blur, validate and show message
+            ssnInput.addEventListener('blur', function() {
+                validateSSN();
+                document.getElementById('ssnMessage').style.display = 'block';
+            });
         }
 
         // Set hidden input value on form submit for security question
