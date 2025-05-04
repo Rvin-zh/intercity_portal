@@ -170,15 +170,26 @@ func storeResetToken(userID int) (string, error) {
 // validateResetToken checks if a token is valid and returns the user ID.
 func validateResetToken(token string) (int, bool) {
 	tokenMutex.RLock()
-	defer tokenMutex.RUnlock()
 	info, exists := resetTokens[token]
 	valid := exists && !time.Now().After(info.Expiry)
+	tokenMutex.RUnlock() // Release read lock early
 
 	if exists && !valid { // Token expired, remove it
 		tokenMutex.Lock()
-		delete(resetTokens, token)
+		// Double-check it still exists and is expired after acquiring write lock
+		infoCheck, existsCheck := resetTokens[token]
+		if existsCheck && !time.Now().After(infoCheck.Expiry) {
+			// Someone else might have validated/removed it between RUnlock and Lock
+			// Or maybe it was updated/re-added? Treat as invalid but don't delete.
+			valid = false // Ensure we return invalid
+			log.Printf("Reset token %s state changed during validation attempt.", token)
+		} else if existsCheck {
+			delete(resetTokens, token)
+			log.Printf("Reset token %s expired and removed.", token)
+		} else {
+			log.Printf("Reset token %s was already removed before delete.", token)
+		}
 		tokenMutex.Unlock()
-		log.Printf("Reset token %s expired and removed.", token)
 	}
 
 	if valid {
