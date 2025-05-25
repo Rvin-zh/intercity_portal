@@ -260,6 +260,56 @@
                             </form>
                         </div>
                     </div>
+                    
+                    <!-- Change Password Modal -->
+                    <div id="change-password-modal" class="modal">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Change Staff Password</h3>
+                            <form id="change-password-form">
+                                <input type="hidden" id="change-password-user-id">
+                                <div class="form-group">
+                                    <label for="change-password-username">Username</label>
+                                    <input type="text" id="change-password-username" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="new-password">New Password</label>
+                                    <input type="password" id="new-password" name="password" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirm-password">Confirm Password</label>
+                                    <input type="password" id="confirm-password" name="confirm-password" required>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn-secondary cancel-btn">Cancel</button>
+                                    <button type="submit" class="btn-primary">Save Changes</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Change Username Modal -->
+                    <div id="change-username-modal" class="modal">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Change Staff Username</h3>
+                            <form id="change-username-form">
+                                <input type="hidden" id="change-username-user-id">
+                                <div class="form-group">
+                                    <label for="current-username">Current Username</label>
+                                    <input type="text" id="current-username" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="new-username">New Username</label>
+                                    <input type="text" id="new-username" name="username" required>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn-secondary cancel-btn">Cancel</button>
+                                    <button type="submit" class="btn-primary">Save Changes</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -267,7 +317,185 @@
                 <div class="card">
                     <h2>Manage Vehicles</h2>
                     <p>Manage all transportation vehicles in the system.</p>
-                    <!-- Content similar to other sections -->
+                    
+                    <div class="action-bar">
+                        <button class="btn-primary" id="add-vehicle-btn">Add New Vehicle</button>
+                        <div class="search-box">
+                            <input type="text" id="vehicle-search" placeholder="Search vehicles...">
+                            <button class="btn-icon">🔍</button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table id="vehicles-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Vehicle Number</th>
+                                    <th>Type</th>
+                                    <th>Capacity</th>
+                                    <th>Status</th>
+                                    <th>Last Maintenance</th>
+                                    <th>Next Maintenance</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Add Vehicle Modal -->
+                    <div id="add-vehicle-modal" class="modal">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Add New Vehicle</h3>
+                            <form id="add-vehicle-form">
+                                <div class="form-group">
+                                    <label for="vehicle-number">Vehicle Number</label>
+                                    <input type="text" id="vehicle-number" name="vehicle_number" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehicle-type">Vehicle Type</label>
+                                    <select id="vehicle-type" name="type">
+                                        <option value="Bus">Bus</option>
+                                        <option value="Train">Train</option>
+                                        <option value="Subway">Subway</option>
+                                        <option value="Ferry">Ferry</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehicle-capacity">Capacity</label>
+                                    <input type="number" id="vehicle-capacity" name="capacity" min="1" value="50">
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehicle-status">Status</label>
+                                    <select id="vehicle-status" name="status">
+                                        <option value="Active">Active</option>
+                                        <option value="Maintenance">Maintenance</option>
+                                        <option value="Out of Service">Out of Service</option>
+                                        <option value="Reserved">Reserved</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehicle-last-maintenance">Last Maintenance Date</label>
+                                    <input type="date" id="vehicle-last-maintenance" name="last_maintenance">
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehicle-next-maintenance">Next Maintenance Date</label>
+                                    <input type="date" id="vehicle-next-maintenance" name="next_maintenance">
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehicle-notes">Notes</label>
+                                    <textarea id="vehicle-notes" name="notes" rows="3"></textarea>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn-secondary cancel-btn">Cancel</button>
+                                    <button type="submit" class="btn-primary">Add Vehicle</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Edit Vehicle Modal -->
+                    <div id="edit-vehicle-modal" class="modal">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Edit Vehicle</h3>
+                            <form id="edit-vehicle-form">
+                                <input type="hidden" id="edit-vehicle-id">
+                                <div class="form-group">
+                                    <label for="edit-vehicle-number">Vehicle Number</label>
+                                    <input type="text" id="edit-vehicle-number" name="vehicle_number" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit-vehicle-type">Vehicle Type</label>
+                                    <select id="edit-vehicle-type" name="type">
+                                        <option value="Bus">Bus</option>
+                                        <option value="Train">Train</option>
+                                        <option value="Subway">Subway</option>
+                                        <option value="Ferry">Ferry</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit-vehicle-capacity">Capacity</label>
+                                    <input type="number" id="edit-vehicle-capacity" name="capacity" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit-vehicle-status">Status</label>
+                                    <select id="edit-vehicle-status" name="status">
+                                        <option value="Active">Active</option>
+                                        <option value="Maintenance">Maintenance</option>
+                                        <option value="Out of Service">Out of Service</option>
+                                        <option value="Reserved">Reserved</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit-vehicle-last-maintenance">Last Maintenance Date</label>
+                                    <input type="date" id="edit-vehicle-last-maintenance" name="last_maintenance">
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit-vehicle-next-maintenance">Next Maintenance Date</label>
+                                    <input type="date" id="edit-vehicle-next-maintenance" name="next_maintenance">
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit-vehicle-notes">Notes</label>
+                                    <textarea id="edit-vehicle-notes" name="notes" rows="3"></textarea>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn-secondary cancel-btn">Cancel</button>
+                                    <button type="submit" class="btn-primary">Save Changes</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Vehicle Details Modal -->
+                    <div id="view-vehicle-modal" class="modal">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Vehicle Details</h3>
+                            <div id="vehicle-details">
+                                <div class="detail-group">
+                                    <strong>Vehicle Number:</strong>
+                                    <span id="detail-vehicle-number"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Type:</strong>
+                                    <span id="detail-vehicle-type"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Capacity:</strong>
+                                    <span id="detail-vehicle-capacity"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Status:</strong>
+                                    <span id="detail-vehicle-status"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Last Maintenance:</strong>
+                                    <span id="detail-vehicle-last-maintenance"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Next Maintenance:</strong>
+                                    <span id="detail-vehicle-next-maintenance"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Created At:</strong>
+                                    <span id="detail-vehicle-created"></span>
+                                </div>
+                                <div class="detail-group">
+                                    <strong>Notes:</strong>
+                                    <p id="detail-vehicle-notes"></p>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn-secondary cancel-btn">Close</button>
+                                <button type="button" class="btn-primary" id="detail-edit-btn">Edit</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -642,6 +870,28 @@
         display: block;
     }
     
+    /* Vehicle styles */
+    .detail-group {
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .detail-group strong {
+        display: inline-block;
+        width: 150px;
+        color: #333;
+    }
+    
+    .detail-group:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-group p {
+        margin-top: 0.5rem;
+        white-space: pre-line;
+    }
+    
     /* Modal Styles */
     .modal {
         display: none;
@@ -726,6 +976,8 @@
         const addMemberModal = document.getElementById('add-member-modal');
         const editMemberModal = document.getElementById('edit-member-modal');
         const changeRoleModal = document.getElementById('change-role-modal');
+        const changePasswordModal = document.getElementById('change-password-modal');
+        const changeUsernameModal = document.getElementById('change-username-modal');
         const closeButtons = document.querySelectorAll('.close, .cancel-btn');
         
         // Open Add Member modal
@@ -741,6 +993,13 @@
                 addMemberModal.style.display = 'none';
                 editMemberModal.style.display = 'none';
                 changeRoleModal.style.display = 'none';
+                changePasswordModal.style.display = 'none';
+                changeUsernameModal.style.display = 'none';
+                
+                // Vehicle modals
+                if (addVehicleModal) addVehicleModal.style.display = 'none';
+                if (editVehicleModal) editVehicleModal.style.display = 'none';
+                if (viewVehicleModal) viewVehicleModal.style.display = 'none';
             });
         });
         
@@ -754,6 +1013,12 @@
             }
             if (event.target === changeRoleModal) {
                 changeRoleModal.style.display = 'none';
+            }
+            if (event.target === changePasswordModal) {
+                changePasswordModal.style.display = 'none';
+            }
+            if (event.target === changeUsernameModal) {
+                changeUsernameModal.style.display = 'none';
             }
         });
 
@@ -778,6 +1043,76 @@
                     } else {
                         const err = await res.json();
                         alert('Error updating role: ' + (err.error || res.statusText));
+                    }
+                } catch (e) {
+                    alert('Network error: ' + e);
+                }
+            });
+        }
+
+        // Function to handle the change password form submission
+        const changePasswordForm = document.getElementById('change-password-form');
+        if (changePasswordForm) {
+            changePasswordForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const userId = document.getElementById('change-password-user-id').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                
+                // Check that passwords match
+                if (newPassword !== confirmPassword) {
+                    alert('Passwords do not match!');
+                    return;
+                }
+                
+                try {
+                    const res = await fetch('/admin/users/password', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id: parseInt(userId), password: newPassword})
+                    });
+                    if (res.ok) {
+                        alert('Password updated successfully.');
+                        changePasswordModal.style.display = 'none';
+                        // Clear the form
+                        document.getElementById('new-password').value = '';
+                        document.getElementById('confirm-password').value = '';
+                    } else {
+                        const err = await res.json();
+                        alert('Error updating password: ' + (err.error || res.statusText));
+                    }
+                } catch (e) {
+                    alert('Network error: ' + e);
+                }
+            });
+        }
+
+        // Function to handle the change username form submission
+        const changeUsernameForm = document.getElementById('change-username-form');
+        if (changeUsernameForm) {
+            changeUsernameForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const userId = document.getElementById('change-username-user-id').value;
+                const newUsername = document.getElementById('new-username').value;
+                
+                if (!newUsername || newUsername.trim() === '') {
+                    alert('Username cannot be empty!');
+                    return;
+                }
+                
+                try {
+                    const res = await fetch('/admin/users/username', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id: parseInt(userId), username: newUsername})
+                    });
+                    if (res.ok) {
+                        alert('Username updated successfully.');
+                        changeUsernameModal.style.display = 'none';
+                        loadUsers();
+                    } else {
+                        const err = await res.json();
+                        alert('Error updating username: ' + (err.error || res.statusText));
                     }
                 } catch (e) {
                     alert('Network error: ' + e);
@@ -812,6 +1147,8 @@
                                     <td><span class="status-active">Active</span></td>
                                     <td>
                                         <button class="btn-small edit-user-btn" data-id="${user.id}">Change Role</button>
+                                        <button class="btn-small btn-primary change-username-btn" data-id="${user.id}">Change Username</button>
+                                        <button class="btn-small btn-success change-password-btn" data-id="${user.id}">Change Password</button>
                                         <button class="btn-small btn-warning delete-user-btn" data-id="${user.id}">Delete</button>
                                     </td>
                                 `;
@@ -845,6 +1182,43 @@
                         
                         // Show the modal
                         changeRoleModal.style.display = 'block';
+                    });
+                });
+                
+                // Handle change password button clicks
+                document.querySelectorAll('.change-password-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const userId = this.getAttribute('data-id');
+                        const row = this.closest('tr');
+                        const username = row.cells[1].textContent;
+                        
+                        // Set values in the modal
+                        document.getElementById('change-password-user-id').value = userId;
+                        document.getElementById('change-password-username').value = username;
+                        
+                        // Clear any previous password values
+                        document.getElementById('new-password').value = '';
+                        document.getElementById('confirm-password').value = '';
+                        
+                        // Show the modal
+                        changePasswordModal.style.display = 'block';
+                    });
+                });
+
+                // Handle change username button clicks
+                document.querySelectorAll('.change-username-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const userId = this.getAttribute('data-id');
+                        const row = this.closest('tr');
+                        const username = row.cells[1].textContent;
+                        
+                        // Set values in the modal
+                        document.getElementById('change-username-user-id').value = userId;
+                        document.getElementById('current-username').value = username;
+                        document.getElementById('new-username').value = '';
+                        
+                        // Show the modal
+                        changeUsernameModal.style.display = 'block';
                     });
                 });
 
@@ -904,6 +1278,301 @@
                 } catch (e) {
                     alert('Network error: ' + e);
                 }
+            });
+        }
+        
+        // Vehicle management functionality
+        const vehicleManagementSection = document.getElementById('vehicles-section');
+        if (vehicleManagementSection) {
+            const addVehicleBtn = document.getElementById('add-vehicle-btn');
+            const addVehicleModal = document.getElementById('add-vehicle-modal');
+            const editVehicleModal = document.getElementById('edit-vehicle-modal');
+            const viewVehicleModal = document.getElementById('view-vehicle-modal');
+            const addVehicleForm = document.getElementById('add-vehicle-form');
+            const editVehicleForm = document.getElementById('edit-vehicle-form');
+            const detailEditBtn = document.getElementById('detail-edit-btn');
+            
+            // Function to load vehicles
+            function loadVehicles() {
+                fetch('/admin/vehicles')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(vehicles => {
+                        const tbody = document.querySelector('#vehicles-table tbody');
+                        if (tbody) {
+                            tbody.innerHTML = '';
+                            vehicles.forEach(vehicle => {
+                                const row = document.createElement('tr');
+                                
+                                // Format status with appropriate class
+                                let statusClass = 'status-active';
+                                if (vehicle.status === 'Maintenance') {
+                                    statusClass = 'status-pending';
+                                } else if (vehicle.status === 'Out of Service') {
+                                    statusClass = 'status-inactive';
+                                }
+                                
+                                row.innerHTML = `
+                                    <td>${vehicle.id}</td>
+                                    <td>${vehicle.vehicle_number}</td>
+                                    <td>${vehicle.type}</td>
+                                    <td>${vehicle.capacity}</td>
+                                    <td><span class="${statusClass}">${vehicle.status}</span></td>
+                                    <td>${vehicle.last_maintenance || 'N/A'}</td>
+                                    <td>${vehicle.next_maintenance || 'N/A'}</td>
+                                    <td>
+                                        <button class="btn-small view-vehicle-btn" data-id="${vehicle.id}">View</button>
+                                        <button class="btn-small btn-primary edit-vehicle-btn" data-id="${vehicle.id}">Edit</button>
+                                        <button class="btn-small btn-warning delete-vehicle-btn" data-id="${vehicle.id}">Delete</button>
+                                    </td>
+                                `;
+                                tbody.appendChild(row);
+                            });
+                            
+                            // Add event listeners to the new buttons
+                            attachVehicleActionListeners();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading vehicles:', error);
+                        alert('Failed to load vehicles. Please try again later.');
+                    });
+            }
+            
+            // Function to attach event listeners for vehicle actions
+            function attachVehicleActionListeners() {
+                // View vehicle details
+                document.querySelectorAll('.view-vehicle-btn').forEach(button => {
+                    button.addEventListener('click', async function() {
+                        const vehicleId = this.getAttribute('data-id');
+                        const row = this.closest('tr');
+                        const vehicleNumber = row.cells[1].textContent;
+                        const vehicleType = row.cells[2].textContent;
+                        const capacity = row.cells[3].textContent;
+                        const status = row.cells[4].textContent;
+                        const lastMaintenance = row.cells[5].textContent;
+                        const nextMaintenance = row.cells[6].textContent;
+                        
+                        // Set data in the view modal
+                        document.getElementById('detail-vehicle-number').textContent = vehicleNumber;
+                        document.getElementById('detail-vehicle-type').textContent = vehicleType;
+                        document.getElementById('detail-vehicle-capacity').textContent = capacity;
+                        document.getElementById('detail-vehicle-status').textContent = status;
+                        document.getElementById('detail-vehicle-last-maintenance').textContent = lastMaintenance;
+                        document.getElementById('detail-vehicle-next-maintenance').textContent = nextMaintenance;
+                        
+                        // Store the vehicle ID for editing
+                        detailEditBtn.setAttribute('data-id', vehicleId);
+                        
+                        // Show the modal
+                        viewVehicleModal.style.display = 'block';
+                    });
+                });
+                
+                // Edit vehicle
+                document.querySelectorAll('.edit-vehicle-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const vehicleId = this.getAttribute('data-id');
+                        const row = this.closest('tr');
+                        
+                        // Set data in the edit modal
+                        document.getElementById('edit-vehicle-id').value = vehicleId;
+                        document.getElementById('edit-vehicle-number').value = row.cells[1].textContent;
+                        document.getElementById('edit-vehicle-type').value = row.cells[2].textContent;
+                        document.getElementById('edit-vehicle-capacity').value = row.cells[3].textContent;
+                        
+                        // Extract status text from the span element
+                        const statusSpan = row.cells[4].querySelector('span');
+                        document.getElementById('edit-vehicle-status').value = statusSpan ? statusSpan.textContent : '';
+                        
+                        // Set maintenance dates
+                        const lastMaintenance = row.cells[5].textContent;
+                        const nextMaintenance = row.cells[6].textContent;
+                        
+                        document.getElementById('edit-vehicle-last-maintenance').value = 
+                            lastMaintenance && lastMaintenance !== 'N/A' ? lastMaintenance : '';
+                        document.getElementById('edit-vehicle-next-maintenance').value = 
+                            nextMaintenance && nextMaintenance !== 'N/A' ? nextMaintenance : '';
+                        
+                        // Show the modal
+                        editVehicleModal.style.display = 'block';
+                    });
+                });
+                
+                // Delete vehicle
+                document.querySelectorAll('.delete-vehicle-btn').forEach(button => {
+                    button.addEventListener('click', async function() {
+                        const vehicleId = this.getAttribute('data-id');
+                        if (confirm('Are you sure you want to delete this vehicle?')) {
+                            try {
+                                const res = await fetch(`/admin/vehicles/${vehicleId}`, {method: 'DELETE'});
+                                if (res.ok) {
+                                    alert('Vehicle deleted successfully.');
+                                    loadVehicles();
+                                } else {
+                                    const err = await res.json();
+                                    alert('Error deleting vehicle: ' + (err.error || res.statusText));
+                                }
+                            } catch (e) {
+                                alert('Network error: ' + e);
+                            }
+                        }
+                    });
+                });
+            }
+            
+            // Handle edit button in vehicle details view
+            if (detailEditBtn) {
+                detailEditBtn.addEventListener('click', function() {
+                    const vehicleId = this.getAttribute('data-id');
+                    
+                    // Set data in the edit modal from the detail view
+                    document.getElementById('edit-vehicle-id').value = vehicleId;
+                    document.getElementById('edit-vehicle-number').value = document.getElementById('detail-vehicle-number').textContent;
+                    document.getElementById('edit-vehicle-type').value = document.getElementById('detail-vehicle-type').textContent;
+                    document.getElementById('edit-vehicle-capacity').value = document.getElementById('detail-vehicle-capacity').textContent;
+                    document.getElementById('edit-vehicle-status').value = document.getElementById('detail-vehicle-status').textContent;
+                    
+                    const lastMaintenance = document.getElementById('detail-vehicle-last-maintenance').textContent;
+                    const nextMaintenance = document.getElementById('detail-vehicle-next-maintenance').textContent;
+                    
+                    document.getElementById('edit-vehicle-last-maintenance').value = 
+                        lastMaintenance && lastMaintenance !== 'N/A' ? lastMaintenance : '';
+                    document.getElementById('edit-vehicle-next-maintenance').value = 
+                        nextMaintenance && nextMaintenance !== 'N/A' ? nextMaintenance : '';
+                    
+                    // Close details modal and open edit modal
+                    viewVehicleModal.style.display = 'none';
+                    editVehicleModal.style.display = 'block';
+                });
+            }
+            
+            // Open Add Vehicle modal
+            if (addVehicleBtn) {
+                addVehicleBtn.addEventListener('click', function() {
+                    addVehicleModal.style.display = 'block';
+                });
+            }
+            
+            // Handle form submissions
+            if (addVehicleForm) {
+                addVehicleForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    // Get form values
+                    const vehicleNumber = document.getElementById('vehicle-number').value;
+                    const vehicleType = document.getElementById('vehicle-type').value;
+                    const capacity = document.getElementById('vehicle-capacity').value;
+                    const status = document.getElementById('vehicle-status').value;
+                    const lastMaintenance = document.getElementById('vehicle-last-maintenance').value;
+                    const nextMaintenance = document.getElementById('vehicle-next-maintenance').value;
+                    const notes = document.getElementById('vehicle-notes').value;
+                    
+                    try {
+                        const res = await fetch('/admin/vehicles/create', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                vehicle_number: vehicleNumber,
+                                type: vehicleType,
+                                capacity: parseInt(capacity),
+                                status: status,
+                                last_maintenance: lastMaintenance,
+                                next_maintenance: nextMaintenance,
+                                notes: notes
+                            })
+                        });
+                        
+                        if (res.ok) {
+                            alert('New vehicle added successfully.');
+                            addVehicleModal.style.display = 'none';
+                            loadVehicles();
+                            // Clear the form
+                            addVehicleForm.reset();
+                        } else {
+                            const err = await res.json();
+                            alert('Error adding vehicle: ' + (err.error || res.statusText));
+                        }
+                    } catch (e) {
+                        alert('Network error: ' + e);
+                    }
+                });
+            }
+            
+            if (editVehicleForm) {
+                editVehicleForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    // Get form values
+                    const vehicleId = document.getElementById('edit-vehicle-id').value;
+                    const vehicleNumber = document.getElementById('edit-vehicle-number').value;
+                    const vehicleType = document.getElementById('edit-vehicle-type').value;
+                    const capacity = document.getElementById('edit-vehicle-capacity').value;
+                    const status = document.getElementById('edit-vehicle-status').value;
+                    const lastMaintenance = document.getElementById('edit-vehicle-last-maintenance').value;
+                    const nextMaintenance = document.getElementById('edit-vehicle-next-maintenance').value;
+                    const notes = document.getElementById('edit-vehicle-notes').value;
+                    
+                    try {
+                        const res = await fetch('/admin/vehicles/update', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                id: parseInt(vehicleId),
+                                vehicle_number: vehicleNumber,
+                                type: vehicleType,
+                                capacity: parseInt(capacity),
+                                status: status,
+                                last_maintenance: lastMaintenance,
+                                next_maintenance: nextMaintenance,
+                                notes: notes
+                            })
+                        });
+                        
+                        if (res.ok) {
+                            alert('Vehicle updated successfully.');
+                            editVehicleModal.style.display = 'none';
+                            loadVehicles();
+                        } else {
+                            const err = await res.json();
+                            alert('Error updating vehicle: ' + (err.error || res.statusText));
+                        }
+                    } catch (e) {
+                        alert('Network error: ' + e);
+                    }
+                });
+            }
+            
+            // Search functionality
+            const vehicleSearch = document.getElementById('vehicle-search');
+            if (vehicleSearch) {
+                vehicleSearch.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const tableRows = document.querySelectorAll('#vehicles-table tbody tr');
+                    
+                    tableRows.forEach(row => {
+                        const vehicleNumber = row.cells[1].textContent.toLowerCase();
+                        const vehicleType = row.cells[2].textContent.toLowerCase();
+                        const status = row.cells[4].textContent.toLowerCase();
+                        
+                        if (vehicleNumber.includes(searchTerm) || 
+                            vehicleType.includes(searchTerm) || 
+                            status.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+            
+            // Load vehicles when the Manage Vehicles link is clicked
+            document.querySelector('a[href="#vehicles"]').addEventListener('click', function() {
+                loadVehicles();
             });
         }
     });

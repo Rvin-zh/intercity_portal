@@ -70,4 +70,12 @@ func RegisterRoutes(e *echo.Echo) {
 	adminGroup.POST("/users/create", dashboard.AdminCreateUserHandler)
 	adminGroup.POST("/users/update", dashboard.AdminUpdateUserHandler)
 	adminGroup.DELETE("/users/:id", dashboard.AdminDeleteUserHandler)
+	adminGroup.POST("/users/password", dashboard.AdminUpdatePasswordHandler)
+	adminGroup.POST("/users/username", dashboard.AdminUpdateUsernameHandler)
+	
+	// Vehicle management routes
+	adminGroup.GET("/vehicles", dashboard.AdminVehiclesHandler)
+	adminGroup.POST("/vehicles/create", dashboard.AdminCreateVehicleHandler)
+	adminGroup.POST("/vehicles/update", dashboard.AdminUpdateVehicleHandler)
+	adminGroup.DELETE("/vehicles/:id", dashboard.AdminDeleteVehicleHandler)
 } 

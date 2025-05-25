@@ -150,6 +150,25 @@ func initializeSchema() error {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
 
+	// Create vehicles table
+	vehiclesTableSQL := `
+	CREATE TABLE IF NOT EXISTS vehicles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		vehicle_number TEXT UNIQUE NOT NULL,
+		type TEXT NOT NULL,
+		capacity INTEGER NOT NULL,
+		status TEXT NOT NULL,
+		last_maintenance_date TEXT,
+		next_maintenance_date TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		notes TEXT
+	);
+	`
+	_, err = DB.Exec(vehiclesTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create vehicles table: %w", err)
+	}
+
 	// Create login_history table if it doesn't exist
 	loginHistoryTableSQL := `
 	CREATE TABLE IF NOT EXISTS login_history (
@@ -237,6 +256,37 @@ func migrateSchema() error {
 		log.Println("Email column added successfully")
 	} else {
 		log.Println("Email column already exists in users table")
+	}
+
+	// Check if vehicles table exists
+	var vehiclesTableExists int
+	err = DB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='vehicles'`).Scan(&vehiclesTableExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if vehicles table exists: %w", err)
+	}
+
+	if vehiclesTableExists == 0 {
+		log.Println("Creating vehicles table...")
+		vehiclesTableSQL := `
+		CREATE TABLE IF NOT EXISTS vehicles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			vehicle_number TEXT UNIQUE NOT NULL,
+			type TEXT NOT NULL,
+			capacity INTEGER NOT NULL,
+			status TEXT NOT NULL,
+			last_maintenance_date TEXT,
+			next_maintenance_date TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			notes TEXT
+		);
+		`
+		_, err := DB.Exec(vehiclesTableSQL)
+		if err != nil {
+			return fmt.Errorf("failed to create vehicles table: %w", err)
+		}
+		log.Println("vehicles table created successfully")
+	} else {
+		log.Println("vehicles table already exists")
 	}
 
 	// Check if security_questions table exists
@@ -385,6 +435,28 @@ func UpdateUserPassword(userID int, newPasswordHash string) error {
 	_, err := DB.Exec(query, newPasswordHash, userID)
 	if err != nil {
 		return fmt.Errorf("error updating password for user ID %d: %w", userID, err)
+	}
+	return nil
+}
+
+// UpdateUsername updates a user's username in the database.
+func UpdateUsername(userID int64, newUsername string) error {
+	// Check if username already exists
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE username = ? AND id != ?", newUsername, userID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("error checking if username exists: %w", err)
+	}
+	
+	if count > 0 {
+		return fmt.Errorf("username '%s' is already taken", newUsername)
+	}
+	
+	// Update the username
+	query := "UPDATE users SET username = ? WHERE id = ?"
+	_, err = DB.Exec(query, newUsername, userID)
+	if err != nil {
+		return fmt.Errorf("error updating username for user ID %d: %w", userID, err)
 	}
 	return nil
 }
@@ -602,6 +674,115 @@ func DeleteUser(userID int64) error {
 	_, err := DB.Exec(query, userID)
 	if err != nil {
 		return fmt.Errorf("error deleting user ID %d: %w", userID, err)
+	}
+	return nil
+}
+
+// --- Vehicle Functions ---
+
+// AddVehicle adds a new vehicle to the database
+func AddVehicle(vehicleNumber, vehicleType string, capacity int, status, lastMaintenance, nextMaintenance, notes string) (int64, error) {
+	// Validate inputs (basic check)
+	if vehicleNumber == "" || vehicleType == "" || status == "" {
+		return 0, fmt.Errorf("vehicle number, type, and status are required")
+	}
+
+	// Prepare the SQL statement for inserting a new vehicle
+	stmt, err := DB.Prepare(`
+		INSERT INTO vehicles (vehicle_number, type, capacity, status, last_maintenance_date, next_maintenance_date, notes)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Execute the statement with the provided values
+	result, err := stmt.Exec(vehicleNumber, vehicleType, capacity, status, lastMaintenance, nextMaintenance, notes)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert vehicle: %w", err)
+	}
+
+	// Get the ID of the inserted vehicle
+	vehicleID, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	return vehicleID, nil
+}
+
+// GetAllVehicles retrieves all vehicles from the database
+func GetAllVehicles() (*sql.Rows, error) {
+	rows, err := DB.Query(`
+		SELECT id, vehicle_number, type, capacity, status, 
+			   last_maintenance_date, next_maintenance_date, created_at, notes 
+		FROM vehicles 
+		ORDER BY vehicle_number
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving all vehicles: %w", err)
+	}
+	return rows, nil
+}
+
+// GetVehicleByID retrieves a vehicle by its ID
+func GetVehicleByID(vehicleID int64) (*sql.Row, error) {
+	query := `
+		SELECT id, vehicle_number, type, capacity, status, 
+			   last_maintenance_date, next_maintenance_date, created_at, notes 
+		FROM vehicles 
+		WHERE id = ?
+	`
+	row := DB.QueryRow(query, vehicleID)
+	return row, nil
+}
+
+// UpdateVehicle updates a vehicle's information in the database
+func UpdateVehicle(vehicleID int64, vehicleNumber, vehicleType string, capacity int, 
+				  status, lastMaintenance, nextMaintenance, notes string) error {
+	// Validate inputs
+	if vehicleNumber == "" || vehicleType == "" || status == "" {
+		return fmt.Errorf("vehicle number, type, and status are required")
+	}
+
+	// Check if vehicle number already exists for a different vehicle
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM vehicles WHERE vehicle_number = ? AND id != ?", 
+					  vehicleNumber, vehicleID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("error checking if vehicle number exists: %w", err)
+	}
+	
+	if count > 0 {
+		return fmt.Errorf("vehicle number '%s' is already in use", vehicleNumber)
+	}
+
+	query := `
+		UPDATE vehicles 
+		SET vehicle_number = ?, 
+			type = ?, 
+			capacity = ?, 
+			status = ?, 
+			last_maintenance_date = ?, 
+			next_maintenance_date = ?, 
+			notes = ? 
+		WHERE id = ?
+	`
+	_, err = DB.Exec(query, vehicleNumber, vehicleType, capacity, status, 
+					lastMaintenance, nextMaintenance, notes, vehicleID)
+	if err != nil {
+		return fmt.Errorf("error updating vehicle with ID %d: %w", vehicleID, err)
+	}
+	return nil
+}
+
+// DeleteVehicle deletes a vehicle from the database
+func DeleteVehicle(vehicleID int64) error {
+	query := "DELETE FROM vehicles WHERE id = ?"
+	_, err := DB.Exec(query, vehicleID)
+	if err != nil {
+		return fmt.Errorf("error deleting vehicle with ID %d: %w", vehicleID, err)
 	}
 	return nil
 }
