@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"SecureSignIn/db"
+	"SecureSignIn/routes"
 	"SecureSignIn/utils"
 
 	"github.com/labstack/echo/v4"
@@ -44,8 +45,6 @@ func main() {
 			return err
 		}
 	})
-
-	e.Use(logAndRecover)
 
 	// Serve static files
 	e.Static("/static", "static")
@@ -82,23 +81,8 @@ func main() {
 	// Schedule regular backups (every 24 hours)
 	utils.ScheduleBackups(dbPath, 24)
 
-	// Routes
-	e.GET("/", indexHandler)
-	e.GET("/dashboard", dashboardHandler)
-	e.GET("/login", loginHandler)
-	e.POST("/auth", basicAuthHandler)
-	e.GET("/forgot", forgotHandler)
-	e.POST("/forgot", forgotHandler)
-	e.GET("/reset/:token", showResetFormHandler)
-	e.POST("/reset/:token", handleResetPasswordHandler)
-	e.GET("/security-reset", securityQuestionResetHandler)
-	e.POST("/security-reset", securityQuestionResetHandler)
-	e.GET("/setup-security", setupSecurityQuestionHandler)
-	e.POST("/setup-security", setupSecurityQuestionHandler)
-	e.GET("/health", healthCheckHandler)
-	e.GET("/register", registerHandler)
-	e.POST("/register", basicRegisterHandler)
-	e.GET("/logout", logoutHandler)
+	// Register routes
+	routes.RegisterRoutes(e)
 
 	// Create custom server with timeouts
 	server := &http.Server{
