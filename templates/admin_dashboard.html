@@ -232,6 +232,34 @@
                             </form>
                         </div>
                     </div>
+                    
+                    <!-- Change Role Modal -->
+                    <div id="change-role-modal" class="modal">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Change Staff Role</h3>
+                            <form id="change-role-form">
+                                <input type="hidden" id="change-role-user-id">
+                                <div class="form-group">
+                                    <label for="change-role-username">Username</label>
+                                    <input type="text" id="change-role-username" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="change-role-select">Role</label>
+                                    <select id="change-role-select" name="role">
+                                        <option value="Operator">Operator</option>
+                                        <option value="Manager">Manager</option>
+                                        <option value="Accountant">Accountant</option>
+                                        <option value="Admin">Admin</option>
+                                    </select>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn-secondary cancel-btn">Cancel</button>
+                                    <button type="submit" class="btn-primary">Save Changes</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -697,6 +725,7 @@
         const addMemberBtn = document.getElementById('add-member-btn');
         const addMemberModal = document.getElementById('add-member-modal');
         const editMemberModal = document.getElementById('edit-member-modal');
+        const changeRoleModal = document.getElementById('change-role-modal');
         const closeButtons = document.querySelectorAll('.close, .cancel-btn');
         
         // Open Add Member modal
@@ -706,33 +735,12 @@
             });
         }
         
-        // Open Edit Member modal when Edit button is clicked
-        const editMemberButtons = document.querySelectorAll('.edit-member-btn');
-        editMemberButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const memberId = this.getAttribute('data-id');
-                document.getElementById('edit-member-id').value = memberId;
-                
-                // In a real application, you would fetch member data from the server
-                // For this demo, we'll just use the table data
-                const row = this.closest('tr');
-                const name = row.cells[1].textContent;
-                const email = row.cells[2].textContent;
-                const role = row.cells[3].textContent;
-                
-                document.getElementById('edit-member-name').value = name;
-                document.getElementById('edit-member-email').value = email;
-                document.getElementById('edit-member-role').value = role;
-                
-                editMemberModal.style.display = 'block';
-            });
-        });
-        
         // Close modals when close button or cancel is clicked
         closeButtons.forEach(button => {
             button.addEventListener('click', function() {
                 addMemberModal.style.display = 'none';
                 editMemberModal.style.display = 'none';
+                changeRoleModal.style.display = 'none';
             });
         });
         
@@ -744,67 +752,38 @@
             if (event.target === editMemberModal) {
                 editMemberModal.style.display = 'none';
             }
+            if (event.target === changeRoleModal) {
+                changeRoleModal.style.display = 'none';
+            }
         });
-        
-        // Handle form submissions
-        const addMemberForm = document.getElementById('add-member-form');
-        if (addMemberForm) {
-            addMemberForm.addEventListener('submit', function(e) {
+
+        // Function to handle the change role form submission
+        const changeRoleForm = document.getElementById('change-role-form');
+        if (changeRoleForm) {
+            changeRoleForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
-                // In a real application, you would send this data to the server
-                alert('In a real application, this would create a new member with the provided details.');
-                addMemberModal.style.display = 'none';
+                const userId = document.getElementById('change-role-user-id').value;
+                const newRole = document.getElementById('change-role-select').value;
+                
+                try {
+                    const res = await fetch('/admin/users/update', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id: parseInt(userId), role: newRole})
+                    });
+                    if (res.ok) {
+                        alert('Role updated successfully.');
+                        changeRoleModal.style.display = 'none';
+                        loadUsers();
+                    } else {
+                        const err = await res.json();
+                        alert('Error updating role: ' + (err.error || res.statusText));
+                    }
+                } catch (e) {
+                    alert('Network error: ' + e);
+                }
             });
         }
-        
-        const editMemberForm = document.getElementById('edit-member-form');
-        if (editMemberForm) {
-            editMemberForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const memberId = document.getElementById('edit-member-id').value;
-                // In a real application, you would send this data to the server
-                alert(`In a real application, this would update member ${memberId} with the new details.`);
-                editMemberModal.style.display = 'none';
-            });
-        }
-        
-        // Handle Activate/Deactivate buttons
-        const activateButtons = document.querySelectorAll('.activate-member-btn');
-        const deactivateButtons = document.querySelectorAll('.deactivate-member-btn');
-        
-        activateButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const memberId = this.getAttribute('data-id');
-                // In a real application, you would send this request to the server
-                alert(`In a real application, this would activate member ${memberId}.`);
-                
-                // Update UI to reflect the change
-                const statusCell = this.closest('tr').querySelector('td:nth-child(6)');
-                statusCell.innerHTML = '<span class="status-active">Active</span>';
-                
-                // Replace the current button with a deactivate button
-                const actionCell = this.closest('td');
-                const editButton = actionCell.querySelector('.edit-member-btn').outerHTML;
-                actionCell.innerHTML = editButton + '<button class="btn-small btn-warning deactivate-member-btn" data-id="' + memberId + '">Deactivate</button>';
-            });
-        });
-        
-        deactivateButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const memberId = this.getAttribute('data-id');
-                // In a real application, you would send this request to the server
-                alert(`In a real application, this would deactivate member ${memberId}.`);
-                
-                // Update UI to reflect the change
-                const statusCell = this.closest('tr').querySelector('td:nth-child(6)');
-                statusCell.innerHTML = '<span class="status-inactive">Inactive</span>';
-                
-                // Replace the current button with an activate button
-                const actionCell = this.closest('td');
-                const editButton = actionCell.querySelector('.edit-member-btn').outerHTML;
-                actionCell.innerHTML = editButton + '<button class="btn-small btn-success activate-member-btn" data-id="' + memberId + '">Activate</button>';
-            });
-        });
 
         // Admin dashboard specific functionality
         const memberManagementSection = document.getElementById('members-section');
@@ -851,31 +830,21 @@
             
             // Function to attach event listeners for role changes and deletions
             function attachUserActionListeners() {
+                // Handle change role button clicks
                 document.querySelectorAll('.edit-user-btn').forEach(button => {
-                    button.addEventListener('click', async function() {
+                    button.addEventListener('click', function() {
                         const userId = this.getAttribute('data-id');
-                        const currentRole = this.closest('tr').querySelector('td:nth-child(4)').textContent;
-                        const newRole = prompt('Enter new role (Operator, Manager, Accountant, Admin):', currentRole);
-                        if (newRole && ['Operator','Manager','Accountant','Admin'].includes(newRole)) {
-                            try {
-                                const res = await fetch('/admin/users/update', {
-                                    method: 'POST',
-                                    headers: {'Content-Type': 'application/json'},
-                                    body: JSON.stringify({id: userId, role: newRole})
-                                });
-                                if (res.ok) {
-                                    alert('Role updated successfully.');
-                                    loadUsers();
-                                } else {
-                                    const err = await res.json();
-                                    alert('Error updating role: ' + (err.error || res.statusText));
-                                }
-                            } catch (e) {
-                                alert('Network error: ' + e);
-                            }
-                        } else {
-                            alert('Invalid role or cancelled.');
-                        }
+                        const row = this.closest('tr');
+                        const username = row.cells[1].textContent;
+                        const currentRole = row.cells[3].textContent;
+                        
+                        // Set values in the modal
+                        document.getElementById('change-role-user-id').value = userId;
+                        document.getElementById('change-role-username').value = username;
+                        document.getElementById('change-role-select').value = currentRole;
+                        
+                        // Show the modal
+                        changeRoleModal.style.display = 'block';
                     });
                 });
 
@@ -903,6 +872,38 @@
             // Load users when the Manage Members link is clicked
             document.querySelector('a[href="#members"]').addEventListener('click', function() {
                 loadUsers();
+            });
+        }
+
+        // Handle form submissions
+        const addMemberForm = document.getElementById('add-member-form');
+        if (addMemberForm) {
+            addMemberForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const username = document.getElementById('member-name').value;
+                const email = document.getElementById('member-email').value;
+                const password = document.getElementById('member-password').value;
+                const role = document.getElementById('member-role').value;
+                
+                try {
+                    const res = await fetch('/admin/users/create', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({username, email, password, role})
+                    });
+                    if (res.ok) {
+                        alert('New staff member created successfully.');
+                        addMemberModal.style.display = 'none';
+                        loadUsers();
+                        // Clear the form
+                        addMemberForm.reset();
+                    } else {
+                        const err = await res.json();
+                        alert('Error creating staff member: ' + (err.error || res.statusText));
+                    }
+                } catch (e) {
+                    alert('Network error: ' + e);
+                }
             });
         }
     });

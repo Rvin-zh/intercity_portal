@@ -119,27 +119,35 @@ func AdminCreateUserHandler(c echo.Context) error {
 		})
 	}
 
-	// Parse form data
-	username := c.FormValue("username")
-	email := c.FormValue("email")
-	password := c.FormValue("password")
-	role := c.FormValue("role")
+	// Parse JSON request
+	var req struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request format",
+		})
+	}
 
 	// Basic validation
-	if username == "" || email == "" || password == "" {
+	if req.Username == "" || req.Email == "" || req.Password == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Username, email, and password are required",
 		})
 	}
 
 	// Check valid role
-	if role != "Operator" && role != "Manager" && role != "Accountant" && role != "Admin" {
-		role = "Operator" // Default to Operator if invalid role
+	if req.Role != "Operator" && req.Role != "Manager" && req.Role != "Accountant" && req.Role != "Admin" {
+		req.Role = "Operator" // Default to Operator if invalid role
 	}
 
 	// Create user
 	// Hash the password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Error hashing password: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -148,7 +156,7 @@ func AdminCreateUserHandler(c echo.Context) error {
 	}
 	
 	// Add user to database
-	userID, err := db.AddUser(username, string(hashedPassword), "", "", email, role)
+	userID, err := db.AddUser(req.Username, string(hashedPassword), "", "", req.Email, req.Role)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -156,7 +164,7 @@ func AdminCreateUserHandler(c echo.Context) error {
 		})
 	}
 	
-	log.Printf("User created successfully by admin. ID: %d, Username: %s, Role: %s", userID, username, role)
+	log.Printf("User created successfully by admin. ID: %d, Username: %s, Role: %s", userID, req.Username, req.Role)
 	
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "User created successfully",
