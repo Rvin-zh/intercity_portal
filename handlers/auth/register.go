@@ -199,29 +199,13 @@ func BasicRegisterHandler(c echo.Context) error {
 		})
 	}
 
-	// Save to database
-	log.Printf("Attempting database insert")
-	query := "INSERT INTO users (username, email, password, date_of_birth, social_security) VALUES (?, ?, ?, ?, ?)"
-	result, err := db.DB.Exec(query, username, email, string(hashedPassword), dob, ssn)
+	// Add user to database
+	userID, err := db.AddUser(username, string(hashedPassword), dob, ssn, email, "Operator")
 	if err != nil {
-		log.Printf("ERROR: Database error: %v", err)
+		log.Printf("ERROR: Failed to add user: %v", err)
 		return templates.RenderTemplate(c, "register.html", models.PageData{
 			Title:      "Register",
-			Error:      "Database error: " + err.Error(),
-			ActivePage: "register",
-			Username:   username,
-			Email:      email,
-			DOB:        dob,
-			SSN:        ssn,
-		})
-	}
-
-	userID, err := result.LastInsertId()
-	if err != nil {
-		log.Printf("ERROR: Failed to get lastInsertId: %v", err)
-		return templates.RenderTemplate(c, "register.html", models.PageData{
-			Title:      "Register",
-			Error:      "Database error: " + err.Error(),
+			Error:      "Failed to create user account. Please try again.",
 			ActivePage: "register",
 			Username:   username,
 			Email:      email,

@@ -15,14 +15,25 @@ import (
 // Handler - For logged in users
 func DashboardHandler(c echo.Context) error {
 	// Make sure user is logged in first by checking for username cookie
-	cookie, err := c.Cookie("username")
-	if err != nil || cookie.Value == "" {
+	usernameCookie, err := c.Cookie("username")
+	if err != nil || usernameCookie.Value == "" {
 		log.Printf("Dashboard access attempted without valid session")
 		return c.Redirect(http.StatusSeeOther, "/login?error=You must be logged in to access this page")
 	}
 
-	username := cookie.Value
+	username := usernameCookie.Value
 	log.Printf("Dashboard accessed by user: %s", username)
+
+	// Get the user role
+	roleCookie, err := c.Cookie("user_role")
+	var userRole string
+	if err != nil || roleCookie.Value == "" {
+		// If role cookie not found, default to Operator
+		userRole = "Operator"
+		log.Printf("Warning: No role cookie found for user %s, defaulting to Operator", username)
+	} else {
+		userRole = roleCookie.Value
+	}
 
 	// Fetch all users
 	allUsers, err := db.GetAllUsers()
@@ -34,6 +45,7 @@ func DashboardHandler(c echo.Context) error {
 			ActivePage: "dashboard",
 			IsLoggedIn: true,
 			Username:   username,
+			UserRole:   userRole,
 		})
 	}
 	userMaps, err := handlers.RowsToMap(allUsers)
@@ -51,6 +63,7 @@ func DashboardHandler(c echo.Context) error {
 			ActivePage: "dashboard",
 			IsLoggedIn: true,
 			Username:   username,
+			UserRole:   userRole,
 		})
 	}
 	historyMaps, err := handlers.RowsToMap(loginHistory)
@@ -76,15 +89,35 @@ func DashboardHandler(c echo.Context) error {
 		}
 	}
 
-	return templates.RenderTemplate(c, "dashboard.html", models.PageData{
+	// Prepare common data
+	data := models.PageData{
 		Title:        "Dashboard",
 		ActivePage:   "dashboard",
 		Users:        userMaps,
 		LoginLogs:    historyMaps,
 		IsLoggedIn:   true,
 		Username:     username,
+		UserRole:     userRole,
 		HasSecurityQ: hasSecurityQ,
-	})
+		Success:      c.QueryParam("success"),
+		Error:        c.QueryParam("error"),
+	}
+
+	// Render appropriate dashboard based on role
+	switch userRole {
+	case "Operator":
+		return templates.RenderTemplate(c, "operator_dashboard.html", data)
+	case "Manager":
+		return templates.RenderTemplate(c, "manager_dashboard.html", data)
+	case "Accountant":
+		return templates.RenderTemplate(c, "accountant_dashboard.html", data)
+	case "Admin":
+		return templates.RenderTemplate(c, "admin_dashboard.html", data)
+	default:
+		// Default to operator dashboard if role is unknown
+		log.Printf("Warning: Unknown role '%s' for user %s, defaulting to Operator dashboard", userRole, username)
+		return templates.RenderTemplate(c, "operator_dashboard.html", data)
+	}
 }
 
 // IndexHandler - Redirects appropriately

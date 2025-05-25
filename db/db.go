@@ -11,6 +11,7 @@ import (
 	"SecureSignIn/utils"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	"golang.org/x/crypto/bcrypt"
 )
 
 var DB *sql.DB
@@ -113,6 +114,12 @@ func InitializeDB() error {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 
+	// Apply any schema migrations
+	if err = migrateSchema(); err != nil {
+		log.Printf("Warning: Schema migration failed: %v", err)
+		// Continue anyway, as the application might still work with the existing schema
+	}
+
 	// Verify that all expected tables and indexes exist
 	if err := utils.VerifyTableConsistency(DB); err != nil {
 		log.Printf("Warning: Table consistency check failed: %v", err)
@@ -134,7 +141,8 @@ func initializeSchema() error {
 		password TEXT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		date_of_birth TEXT,
-		social_security TEXT
+		social_security TEXT,
+		role TEXT DEFAULT 'Operator'
 	);
 	`
 	_, err := DB.Exec(usersTableSQL)
@@ -259,86 +267,107 @@ func migrateSchema() error {
 		log.Println("security_questions table already exists")
 	}
 
+	// Check if the role column exists in the users table
+	var roleExists int
+	err = DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='role'").Scan(&roleExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if role column exists: %w", err)
+	}
+
+	// If role column does not exist, add it
+	if roleExists == 0 {
+		log.Println("Adding 'role' column to users table...")
+		_, err = DB.Exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'Operator'")
+		if err != nil {
+			return fmt.Errorf("failed to add role column: %w", err)
+		}
+		log.Println("Added 'role' column to users table")
+	}
+
 	return nil
 }
 
-// AddUser inserts a new user into the database (SQLite).
-func AddUser(username, passwordHash, dob, ssn string, email string) (int64, error) {
-	// Validate required fields
+// AddUser creates a new user record in the database
+func AddUser(username, passwordHash, dob, ssn string, email string, role string) (int64, error) {
+	// Validate inputs (basic check)
 	if username == "" || passwordHash == "" || email == "" {
-		return 0, fmt.Errorf("username, password, and email are required fields")
+		return 0, fmt.Errorf("username, password, and email are required")
 	}
 
-	// Check if email column exists
-	var count int
-	err := DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='email'`).Scan(&count)
+	// If role is empty, default to Operator
+	if role == "" {
+		role = "Operator"
+	}
+
+	// Prepare the SQL statement for inserting a new user
+	stmt, err := DB.Prepare(`
+		INSERT INTO users (username, password, date_of_birth, social_security, email, role)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
 	if err != nil {
-		return 0, fmt.Errorf("failed to check if email column exists: %w", err)
+		return 0, fmt.Errorf("failed to prepare statement: %w", err)
 	}
+	defer stmt.Close()
 
-	var result sql.Result
-	if count > 0 {
-		// Table has email column
-		query := "INSERT INTO users (username, password, date_of_birth, social_security, email) VALUES (?, ?, ?, ?, ?)"
-		result, err = DB.Exec(query, username, passwordHash, dob, ssn, email)
-	} else {
-		// Fall back to original schema without email
-		query := "INSERT INTO users (username, password, date_of_birth, social_security) VALUES (?, ?, ?, ?)"
-		result, err = DB.Exec(query, username, passwordHash, dob, ssn)
-		log.Printf("Warning: User created without email because email column doesn't exist")
-	}
-
+	// Execute the statement with the provided values
+	result, err := stmt.Exec(username, passwordHash, dob, ssn, email, role)
 	if err != nil {
-		return 0, fmt.Errorf("error inserting user (sqlite): %w", err)
+		return 0, fmt.Errorf("failed to insert user: %w", err)
 	}
 
+	// Get the ID of the inserted user
 	userID, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("error getting last insert ID: %w", err)
+		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
 	}
 
 	return userID, nil
 }
 
-// GetUserByUsername retrieves a user by their username (SQLite).
+// GetUserByUsername retrieves a user by username.
 func GetUserByUsername(username string) (*sql.Row, error) {
-	// Check if email column exists
+	// First check if the username exists
 	var count int
-	err := DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='email'`).Scan(&count)
+	err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", username).Scan(&count)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if email column exists: %w", err)
-	}
-
-	var row *sql.Row
-	if count > 0 {
-		// Table has email column
-		query := "SELECT id, username, date_of_birth, social_security, password, email FROM users WHERE username = ?"
-		row = DB.QueryRow(query, username)
-	} else {
-		// Fall back to original schema without email
-		query := "SELECT id, username, date_of_birth, social_security, password, '' as email FROM users WHERE username = ?"
-		row = DB.QueryRow(query, username)
-	}
-
-	return row, nil // Error checking deferred to Scan
-}
-
-// GetUserByEmail retrieves a user by their email.
-func GetUserByEmail(email string) (*sql.Row, error) {
-	// Check if email column exists
-	var count int
-	err := DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='email'`).Scan(&count)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if email column exists: %w", err)
+		return nil, fmt.Errorf("error checking if username exists: %w", err)
 	}
 
 	if count == 0 {
-		// Email column doesn't exist
-		return nil, fmt.Errorf("email column does not exist in users table")
+		// Return empty row, which will result in sql.ErrNoRows when scanned
+		return DB.QueryRow("SELECT 1 WHERE 1=0"), nil
 	}
 
-	// Return the same structure as GetUserByUsername for consistency
-	query := "SELECT id, username, date_of_birth, social_security, password, email FROM users WHERE email = ?"
+	// Get user details including role
+	query := `
+		SELECT id, username, date_of_birth, social_security, password, email, COALESCE(role, 'Operator') as role
+		FROM users
+		WHERE username = ?
+	`
+	row := DB.QueryRow(query, username)
+	return row, nil
+}
+
+// GetUserByEmail retrieves a user by email.
+func GetUserByEmail(email string) (*sql.Row, error) {
+	// First check if the email exists
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", email).Scan(&count)
+	if err != nil {
+		return nil, fmt.Errorf("error checking if email exists: %w", err)
+	}
+
+	if count == 0 {
+		// Return empty row, which will result in sql.ErrNoRows when scanned
+		return DB.QueryRow("SELECT 1 WHERE 1=0"), nil
+	}
+
+	// Get user details including role
+	query := `
+		SELECT id, username, date_of_birth, social_security, password, email, COALESCE(role, 'Operator') as role
+		FROM users
+		WHERE email = ?
+	`
 	row := DB.QueryRow(query, email)
 	return row, nil
 }
@@ -378,7 +407,7 @@ func LogLoginAttempt(userID int64, ipAddress string, success bool) error {
 
 // GetAllUsers retrieves all users (SQLite).
 func GetAllUsers() (*sql.Rows, error) {
-	rows, err := DB.Query("SELECT id, username, created_at FROM users ORDER BY username")
+	rows, err := DB.Query("SELECT id, username, email, password, created_at, date_of_birth, social_security, role FROM users ORDER BY username")
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving all users: %w", err)
 	}
@@ -521,6 +550,58 @@ func DeleteSecurityQuestions(userID int64) error {
 	_, err := DB.Exec(query, userID)
 	if err != nil {
 		return fmt.Errorf("error deleting security questions for user ID %d: %w", userID, err)
+	}
+	return nil
+}
+
+// EnsureAdminUser creates a default admin user if no admin exists
+func EnsureAdminUser() error {
+	// Check if an admin user already exists
+	query := "SELECT COUNT(*) FROM users WHERE role = 'Admin'"
+	var count int
+	err := DB.QueryRow(query).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("error checking for admin users: %w", err)
+	}
+
+	// If no admin users exist, create one
+	if count == 0 {
+		log.Println("No admin users found. Creating default admin user...")
+		
+		// Hash the default password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("error hashing default admin password: %w", err)
+		}
+		
+		// Insert the admin user
+		_, err = AddUser("admin", string(hashedPassword), "", "", "admin@example.com", "Admin")
+		if err != nil {
+			return fmt.Errorf("error creating default admin user: %w", err)
+		}
+		
+		log.Println("Default admin user created successfully. Username: admin, Password: admin")
+	}
+	
+	return nil
+}
+
+// UpdateUserRole updates a user's role in the database.
+func UpdateUserRole(userID int64, newRole string) error {
+	query := "UPDATE users SET role = ? WHERE id = ?"
+	_, err := DB.Exec(query, newRole, userID)
+	if err != nil {
+		return fmt.Errorf("error updating role for user ID %d: %w", userID, err)
+	}
+	return nil
+}
+
+// DeleteUser deletes a user from the database.
+func DeleteUser(userID int64) error {
+	query := "DELETE FROM users WHERE id = ?"
+	_, err := DB.Exec(query, userID)
+	if err != nil {
+		return fmt.Errorf("error deleting user ID %d: %w", userID, err)
 	}
 	return nil
 }

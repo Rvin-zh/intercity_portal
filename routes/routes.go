@@ -22,7 +22,6 @@ func RegisterRoutes(e *echo.Echo) {
 
 	// Basic routes
 	e.GET("/", dashboard.IndexHandler)
-	e.GET("/dashboard", dashboard.DashboardHandler)
 	e.GET("/health", dashboard.HealthCheckHandler)
 	
 	// Auth routes
@@ -41,6 +40,34 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/reset/:token", auth.HandleResetPasswordHandler)
 	e.GET("/security-reset", auth.SecurityQuestionResetHandler)
 	e.POST("/security-reset", auth.SecurityQuestionResetHandler)
-	e.GET("/setup-security", auth.SetupSecurityQuestionHandler)
-	e.POST("/setup-security", auth.SetupSecurityQuestionHandler)
+	
+	// Authenticated routes (requires login)
+	e.GET("/dashboard", middleware.RequireLogin(dashboard.DashboardHandler))
+	e.GET("/setup-security", middleware.RequireLogin(auth.SetupSecurityQuestionHandler))
+	e.POST("/setup-security", middleware.RequireLogin(auth.SetupSecurityQuestionHandler))
+	
+	// Trip planning routes - accessible to all authenticated users
+	e.GET("/trip-plan", middleware.RequireLogin(dashboard.DashboardHandler)) // Placeholder route
+	
+	// Role-specific routes
+	// Operator routes
+	operatorGroup := e.Group("/operator")
+	operatorGroup.Use(middleware.RequireRole([]string{"Operator", "Manager", "Admin"}))
+	
+	// Manager routes
+	managerGroup := e.Group("/manager")
+	managerGroup.Use(middleware.RequireRole([]string{"Manager", "Admin"}))
+	
+	// Accountant routes
+	accountantGroup := e.Group("/accountant")
+	accountantGroup.Use(middleware.RequireRole([]string{"Accountant", "Admin"}))
+	
+	// Admin routes
+	adminGroup := e.Group("/admin")
+	adminGroup.Use(middleware.RequireRole([]string{"Admin"}))
+	adminGroup.GET("/dashboard", dashboard.AdminDashboardHandler)
+	adminGroup.GET("/users", dashboard.AdminUsersHandler)
+	adminGroup.POST("/users/create", dashboard.AdminCreateUserHandler)
+	adminGroup.POST("/users/update", dashboard.AdminUpdateUserHandler)
+	adminGroup.DELETE("/users/:id", dashboard.AdminDeleteUserHandler)
 } 

@@ -67,6 +67,13 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Ensure admin user exists
+	if err := db.EnsureAdminUser(); err != nil {
+		log.Printf("Warning: Failed to ensure admin user exists: %v", err)
+	} else {
+		log.Println("Admin user check completed successfully")
+	}
+
 	// Set up a database backup on startup and daily backups
 	dbPath := os.Getenv("SQLITE_DB_PATH")
 	if dbPath == "" {

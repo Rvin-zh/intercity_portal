@@ -10,6 +10,7 @@ type PageData struct {
 	LoginLogs        []map[string]interface{}
 	IsLoggedIn       bool
 	Username         string
+	UserRole         string
 	ResetToken       string
 	Email            string
 	ShowCodeInput    bool

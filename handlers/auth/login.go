@@ -81,9 +81,10 @@ func BasicAuthHandler(c echo.Context) error {
 	var storedSSN string
 	var storedPassword string
 	var storedEmail string
+	var storedRole string
 
 	// Scan user data (now both email and username lookups have the same structure)
-	err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword, &storedEmail)
+	err = userRow.Scan(&userID, &storedUsername, &storedDOB, &storedSSN, &storedPassword, &storedEmail, &storedRole)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -135,6 +136,14 @@ func BasicAuthHandler(c echo.Context) error {
 	cookie.Path = "/"
 	c.SetCookie(cookie)
 
+	// Set role cookie
+	roleCookie := new(http.Cookie)
+	roleCookie.Name = "user_role"
+	roleCookie.Value = storedRole
+	roleCookie.Expires = time.Now().Add(24 * time.Hour) // Cookie expires in 24 hours
+	roleCookie.Path = "/"
+	c.SetCookie(roleCookie)
+
 	return c.Redirect(http.StatusSeeOther, "/dashboard?success=Successfully logged in&user="+storedUsername)
 }
 
@@ -149,6 +158,14 @@ func LogoutHandler(c echo.Context) error {
 	cookie.Expires = time.Now().Add(-1 * time.Hour) // Set expiration in the past to delete the cookie
 	cookie.Path = "/"
 	c.SetCookie(cookie)
+
+	// Clear the role cookie
+	roleCookie := new(http.Cookie)
+	roleCookie.Name = "user_role"
+	roleCookie.Value = ""
+	roleCookie.Expires = time.Now().Add(-1 * time.Hour) // Set expiration in the past to delete the cookie
+	roleCookie.Path = "/"
+	c.SetCookie(roleCookie)
 
 	return c.Redirect(http.StatusSeeOther, "/login?success=Successfully logged out.")
 } 
